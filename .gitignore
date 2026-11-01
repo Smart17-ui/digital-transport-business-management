@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.expo/
+*.log
+.env
+.env.*
+!.env.example
+supabase/.temp/
+supabase/functions/_shared/domain/
+supabase/functions/_shared/server/

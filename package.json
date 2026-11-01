@@ -1,0 +1,18 @@
+{
+  "name": "digital-transport",
+  "private": true,
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "test": "npm run test --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "sync:functions": "node scripts/sync-shared.mjs",
+    "check:functions": "node scripts/sync-shared.mjs && cd supabase/functions && npx -y deno@2 check command/index.ts outbox-relay/index.ts send-sms-hook/index.ts",
+    "mobile": "npm run start -w @dt/mobile"
+  },
+  "overrides": {
+    "react": "19.3.0"
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "imports": {
+    "@dt/domain": "./_shared/domain/index.ts",
+    "@dt/server": "./_shared/server/index.ts",
+    "postgres": "npm:postgres@3.4.4",
+    "@supabase/supabase-js": "npm:@supabase/supabase-js@2.45.4"
+  }
+}
