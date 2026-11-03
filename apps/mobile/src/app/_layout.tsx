@@ -1,19 +1,81 @@
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { Button } from '@/components/ui';
+import { AuthProvider, useAuth } from '@/lib/auth';
 import { SampleProvider } from '@/lib/sample';
-import { colors } from '@/lib/theme';
+import { colors, space } from '@/lib/theme';
 
 export default function RootLayout() {
   return (
-    <SampleProvider>
-      <StatusBar style="dark" />
-      <Stack
-        screenOptions={{
-          headerStyle: { backgroundColor: colors.surface },
-          headerTintColor: colors.text,
-          contentStyle: { backgroundColor: colors.background },
-        }}
-      />
-    </SampleProvider>
+    <AuthProvider>
+      <SampleProvider>
+        <StatusBar style="dark" />
+        <Routes />
+      </SampleProvider>
+    </AuthProvider>
   );
 }
+
+function Routes() {
+  const { status, account, refresh, signOut } = useAuth();
+
+  if (status === 'loading') {
+    return (
+      <View style={styles.centre}>
+        <ActivityIndicator size="large" color={colors.primary} />
+      </View>
+    );
+  }
+  if (status === 'unavailable') {
+    return (
+      <View style={styles.centre}>
+        <Text style={styles.message}>Could not load your account. Check your signal and try again.</Text>
+        <Button label="Try again" onPress={refresh} />
+        <Button variant="secondary" label="Sign out" onPress={signOut} />
+      </View>
+    );
+  }
+
+  const signedIn = status === 'ready';
+  const setUp = signedIn && !!account?.displayName && !!account.business;
+
+  return (
+    <Stack
+      screenOptions={{
+        headerStyle: { backgroundColor: colors.surface },
+        headerTintColor: colors.text,
+        contentStyle: { backgroundColor: colors.background },
+      }}
+    >
+      <Stack.Protected guard={!signedIn}>
+        <Stack.Screen name="sign-in" />
+        <Stack.Screen name="verify" />
+      </Stack.Protected>
+      <Stack.Protected guard={signedIn && !setUp}>
+        <Stack.Screen name="setup" />
+      </Stack.Protected>
+      <Stack.Protected guard={setUp}>
+        <Stack.Screen name="index" />
+        <Stack.Screen name="owner" />
+        <Stack.Screen name="driver" />
+        <Stack.Screen name="confirm" />
+        <Stack.Screen name="settlement" />
+        <Stack.Screen name="handover" />
+        <Stack.Screen name="calculator" />
+      </Stack.Protected>
+    </Stack>
+  );
+}
+
+const styles = StyleSheet.create({
+  centre: {
+    flex: 1,
+    alignItems: 'stretch',
+    justifyContent: 'center',
+    gap: space(3),
+    padding: space(6),
+    backgroundColor: colors.background,
+  },
+  message: { fontSize: 16, lineHeight: 23, color: colors.text, textAlign: 'center' },
+});

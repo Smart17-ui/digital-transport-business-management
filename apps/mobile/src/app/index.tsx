@@ -2,31 +2,51 @@ import { router, Stack } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon } from '@/components/icons';
-import { Avatar } from '@/components/ui';
+import { Avatar, Card } from '@/components/ui';
+import { useAuth } from '@/lib/auth';
 import { useSample } from '@/lib/sample';
 import { colors, radius, space } from '@/lib/theme';
 
-export default function ChooseRole() {
+const ROLE_LABELS: Record<string, string> = { owner: 'Owner', driver: 'Driver' };
+
+export default function Home() {
   const insets = useSafeAreaInsets();
   const { reset } = useSample();
+  const { account, signOut } = useAuth();
+  const business = account?.business;
 
   return (
-    <View style={[styles.screen, { paddingTop: insets.top + space(8), paddingBottom: insets.bottom + space(4) }]}>
+    <View style={[styles.screen, { paddingTop: insets.top + space(6), paddingBottom: insets.bottom + space(4) }]}>
       <Stack.Screen options={{ headerShown: false }} />
-      <Text style={styles.title}>Try the app</Text>
+      <Text style={styles.title}>Welcome, {account?.displayName}</Text>
+
+      <Card style={styles.account}>
+        <Text style={styles.accountName}>{business?.name}</Text>
+        <Text style={styles.cardDetail}>
+          {business ? (ROLE_LABELS[business.role] ?? business.role) : ''} · +{account?.phone}
+        </Text>
+      </Card>
+
+      <Text style={styles.section} accessibilityRole="header">
+        Try the screens
+      </Text>
       <Text style={styles.intro}>
-        This uses a sample business. Record cash as the driver, then switch role and confirm it as the owner.
+        You are signed in with your real account, but these screens still use a sample business. Record cash as the
+        driver, then switch role and confirm it as the owner.
       </Text>
 
-      <RoleCard initials="MB" dark title="Owner" detail="Mr Banda, 4 buses" onPress={() => router.push('/owner')} />
-      <RoleCard initials="JM" title="Driver" detail="Joseph, BAF 2314" onPress={() => router.push('/driver')} />
+      <RoleCard initials="MB" dark title="Sample owner" detail="Mr Banda, 4 buses" onPress={() => router.push('/owner')} />
+      <RoleCard initials="JM" title="Sample driver" detail="Joseph, BAF 2314" onPress={() => router.push('/driver')} />
 
       <View style={styles.links}>
         <Pressable onPress={() => router.push('/calculator')} accessibilityRole="link" hitSlop={8}>
-          <Text style={styles.link}>Settlement calculator</Text>
+          <Text style={styles.link}>Calculator</Text>
         </Pressable>
         <Pressable onPress={reset} accessibilityRole="button" hitSlop={8}>
-          <Text style={styles.link}>Reset sample data</Text>
+          <Text style={styles.link}>Reset sample</Text>
+        </Pressable>
+        <Pressable onPress={signOut} accessibilityRole="button" hitSlop={8}>
+          <Text style={styles.link}>Sign out</Text>
         </Pressable>
       </View>
     </View>
@@ -52,8 +72,11 @@ function RoleCard(props: { initials: string; dark?: boolean; title: string; deta
 
 const styles = StyleSheet.create({
   screen: { flex: 1, paddingHorizontal: space(4) },
-  title: { fontSize: 30, fontWeight: '800', color: colors.text },
-  intro: { fontSize: 16, lineHeight: 23, color: colors.muted, marginTop: space(2), marginBottom: space(6) },
+  title: { fontSize: 28, fontWeight: '800', color: colors.text, marginBottom: space(3) },
+  account: { marginBottom: space(6) },
+  accountName: { fontSize: 18, fontWeight: '700', color: colors.text },
+  section: { fontSize: 18, fontWeight: '700', color: colors.text },
+  intro: { fontSize: 15, lineHeight: 22, color: colors.muted, marginTop: space(1), marginBottom: space(4) },
   card: {
     flexDirection: 'row',
     alignItems: 'center',

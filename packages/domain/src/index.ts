@@ -1,5 +1,6 @@
 export * from './errors.ts';
 export * from './money.ts';
+export * from './phone.ts';
 export * from './validate.ts';
 export * from './arrangement/index.ts';
 export * from './policies/approval.ts';
