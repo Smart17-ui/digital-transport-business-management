@@ -45,7 +45,7 @@ export default function OwnerHome() {
         <SectionTitle>Needs you</SectionTitle>
         {toConfirm.length === 0 ? (
           <Card style={styles.done}>
-            <Icon name="check" color={colors.primary} />
+            <Icon name="check" color={colors.owed} />
             <Text style={styles.doneText}>Nothing to confirm right now.</Text>
           </Card>
         ) : (
@@ -135,12 +135,12 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', gap: space(3), marginBottom: space(4) },
   name: { fontSize: 20, fontWeight: '800', color: colors.text },
   detail: { fontSize: 14, color: colors.muted, marginTop: 2 },
-  hero: { backgroundColor: colors.primary, borderRadius: radius.card, padding: space(5) },
-  heroLabel: { fontSize: 15, fontWeight: '600', color: colors.onPrimaryMuted },
-  heroAmount: { fontSize: 46, fontWeight: '800', color: colors.primaryText, marginVertical: space(2), fontVariant: ['tabular-nums'] },
-  heroStats: { flexDirection: 'row', gap: space(3), borderTopWidth: 1, borderTopColor: colors.onPrimaryMuted, paddingTop: space(3) },
-  heroStatLabel: { fontSize: 13, color: colors.onPrimaryMuted },
-  heroStatValue: { fontSize: 18, fontWeight: '700', color: colors.primaryText, marginTop: 2, fontVariant: ['tabular-nums'] },
+  hero: { backgroundColor: colors.dark, borderRadius: radius.card, padding: space(5) },
+  heroLabel: { fontSize: 15, fontWeight: '600', color: colors.onDarkMuted },
+  heroAmount: { fontSize: 46, fontWeight: '800', color: colors.onDark, marginVertical: space(2), fontVariant: ['tabular-nums'] },
+  heroStats: { flexDirection: 'row', gap: space(3), borderTopWidth: 1, borderTopColor: colors.onDarkMuted, paddingTop: space(3) },
+  heroStatLabel: { fontSize: 13, color: colors.onDarkMuted },
+  heroStatValue: { fontSize: 18, fontWeight: '700', color: colors.onDark, marginTop: 2, fontVariant: ['tabular-nums'] },
   done: { flexDirection: 'row', alignItems: 'center', gap: space(2.5) },
   doneText: { fontSize: 15, color: colors.text },
   list: { paddingVertical: 0 },
@@ -161,5 +161,5 @@ const styles = StyleSheet.create({
   fleetRight: { alignItems: 'flex-end' },
   fleetAmount: { fontSize: 16, fontWeight: '700', color: colors.text, fontVariant: ['tabular-nums'] },
   fleetOwed: { fontSize: 13, fontWeight: '600', color: colors.waiting, marginTop: 2 },
-  fleetPaid: { fontSize: 13, fontWeight: '600', color: colors.primary, marginTop: 2 },
+  fleetPaid: { fontSize: 13, fontWeight: '600', color: colors.owed, marginTop: 2 },
 });

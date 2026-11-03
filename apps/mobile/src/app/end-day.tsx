@@ -1,0 +1,67 @@
+import { randomUUID } from 'expo-crypto';
+import { router, Stack, useLocalSearchParams } from 'expo-router';
+import { useRef, useState } from 'react';
+import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text } from 'react-native';
+import { TextField } from '@/components/form';
+import { BottomActions, Button } from '@/components/ui';
+import { useAuth } from '@/lib/auth';
+import { enqueue } from '@/lib/queue';
+import { colors, space } from '@/lib/theme';
+
+export default function EndDay() {
+  const params = useLocalSearchParams<{ day: string; plate: string; start: string }>();
+  const start = Number(params.start);
+  const { userId, account } = useAuth();
+  const [reading, setReading] = useState('');
+  const [saving, setSaving] = useState(false);
+  const clientId = useRef(randomUUID());
+
+  const end = Number(reading);
+  const tooLow = reading !== '' && end < start;
+  const ready = reading !== '' && !tooLow;
+
+  const save = async () => {
+    const businessId = account?.business?.id;
+    if (!userId || !businessId) return;
+    setSaving(true);
+    await enqueue(userId, 'end_day', businessId, { tripDayId: params.day, odometerEnd: end }, clientId.current);
+    router.back();
+  };
+
+  return (
+    <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <Stack.Screen options={{ title: `End day on ${params.plate}` }} />
+      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+        <Text style={styles.intro}>Read the odometer on the bus now that you have finished.</Text>
+        <TextField
+          label="Odometer reading (km)"
+          value={reading}
+          onChange={(text) => setReading(text.replace(/\D/g, ''))}
+          placeholder="For example, 124750"
+          maxLength={7}
+          keyboardType="number-pad"
+          hint={`You started at ${start.toLocaleString('en-US')} km.`}
+        />
+        {tooLow ? (
+          <Text style={styles.error} accessibilityRole="alert">
+            This is lower than the reading when you started.
+          </Text>
+        ) : null}
+        {ready ? <Text style={styles.distance}>You drove {(end - start).toLocaleString('en-US')} km.</Text> : null}
+        <Text style={styles.small}>Once you end the day, you cannot start it again or change these readings.</Text>
+      </ScrollView>
+      <BottomActions>
+        <Button label={saving ? 'Saving...' : 'End day'} disabled={!ready || saving} onPress={save} />
+      </BottomActions>
+    </KeyboardAvoidingView>
+  );
+}
+
+const styles = StyleSheet.create({
+  flex: { flex: 1 },
+  content: { padding: space(4), paddingBottom: space(8) },
+  intro: { fontSize: 16, lineHeight: 23, color: colors.muted, marginBottom: space(5) },
+  error: { fontSize: 14, lineHeight: 20, color: colors.owes },
+  distance: { fontSize: 18, fontWeight: '700', color: colors.text },
+  small: { fontSize: 14, lineHeight: 20, color: colors.muted, marginTop: space(4) },
+});

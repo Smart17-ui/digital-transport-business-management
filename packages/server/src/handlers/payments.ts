@@ -70,3 +70,45 @@ export async function decidePayment(ctx: CommandContext, p: CommandPayload<'deci
   });
   return { paymentId: p.paymentId, state: position.state, remaining: position.remaining };
 }
+
+/** Undoes a mistaken confirmation. The money is owed again, and the payer can record the real payment. */
+export async function reversePayment(ctx: CommandContext, p: CommandPayload<'reverse_payment'>) {
+  const { businessId, ownerId } = requireBusiness(ctx);
+  const payment = toPayment(
+    await one(ctx.db, 'select * from settlement_payments_v where id = $1', [p.paymentId], 'payment.not_found'),
+  );
+  const day = await loadTripDay(ctx.db, payment.tripDayId);
+  const payee = payment.payer === 'driver' ? ownerId : day.snapshot.driverId;
+  invariant(ctx.userId === payee, 'payment.only_payee_decides');
+  invariant(payment.status !== 'reversed', 'payment.already_reversed');
+  invariant(payment.status === 'confirmed', 'payment.not_confirmed');
+  invariant(p.reason.trim().length > 0, 'payment.reason_required');
+
+  await ctx.db.query(
+    `insert into payment_reversals (business_id, payment_id, reason, reversed_by, reversed_at)
+     values ($1, $2, $3, $4, $5)`,
+    [businessId, p.paymentId, p.reason.trim(), ctx.userId, ctx.now],
+  );
+  await ctx.db.query(
+    `insert into audit_entries (business_id, entity_type, entity_id, action, actor_id, reason, details, at)
+     values ($1, 'settlement_payment', $2, 'reverse', $3, $4, $5::text::jsonb, $6)`,
+    [
+      businessId,
+      p.paymentId,
+      ctx.userId,
+      p.reason.trim(),
+      JSON.stringify({ confirmedAmount: payment.confirmedAmount, payer: payment.payer }),
+      ctx.now,
+    ],
+  );
+  const statement = await computeStatement(ctx.db, day);
+  const position = paymentPosition(statement.netBalance, await paymentsForDay(ctx.db, payment.tripDayId));
+  emit(ctx, {
+    type: 'PaymentReversed',
+    businessId,
+    subjectUserId: payment.payer === 'driver' ? day.snapshot.driverId : ownerId,
+    entityId: p.paymentId,
+    link: `/days/${payment.tripDayId}/settlement`,
+  });
+  return { paymentId: p.paymentId, state: position.state, remaining: position.remaining };
+}

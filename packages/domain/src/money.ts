@@ -21,6 +21,16 @@ export function parseKwacha(input: string): Ngwee {
   return ngwee(sign === '-' ? -value : value);
 }
 
+/** Parses a percentage such as "60" or "62.5" into basis points (10000 = 100%). */
+export function parsePercent(input: string): number {
+  const match = /^(\d{1,3})(?:\.(\d{1,2}))?%?$/.exec(input.trim());
+  if (!match) throw new DomainError('money.invalid_percent', `Not a percentage: ${input}`);
+  const [, whole, fraction = ''] = match;
+  const basisPoints = Number(whole) * 100 + Number(fraction.padEnd(2, '0'));
+  invariant(basisPoints <= 10_000, 'money.invalid_percent', 'Cannot be more than 100%');
+  return basisPoints;
+}
+
 /** Formats ngwee as kwacha, for example 125050 -> "K1,250.50". */
 export function formatKwacha(amount: Ngwee): string {
   const sign = amount < 0 ? '-' : '';

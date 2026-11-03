@@ -93,6 +93,7 @@ const payloads = {
     confirmedAmount: v.nullable(amount),
     reason: v.nullable(v.string(300)),
   }),
+  reverse_payment: v.object({ paymentId: v.uuid(), reason: v.nonEmpty(300) }),
   remove_member: v.object({ userId: v.uuid() }),
   record_consent: v.object({ scope: v.nonEmpty(40), noticeVersion: v.nonEmpty(20) }),
   set_profile: v.object({ displayName: v.nonEmpty(80), language: v.oneOf(['en', 'bem', 'nya']) }),

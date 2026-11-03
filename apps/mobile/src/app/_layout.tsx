@@ -39,6 +39,8 @@ function Routes() {
 
   const signedIn = status === 'ready';
   const setUp = signedIn && !!account?.displayName && !!account.business;
+  // Named outright: without it the router falls back to the shortest route name, which is /verify.
+  const start = !signedIn ? '/sign-in' : !setUp ? '/setup' : '/';
 
   return (
     <Stack
@@ -48,15 +50,29 @@ function Routes() {
         contentStyle: { backgroundColor: colors.background },
       }}
     >
-      <Stack.Protected guard={!signedIn}>
+      <Stack.Protected guard={!signedIn} redirectTo={start}>
         <Stack.Screen name="sign-in" />
         <Stack.Screen name="verify" />
       </Stack.Protected>
-      <Stack.Protected guard={signedIn && !setUp}>
+      <Stack.Protected guard={signedIn && !setUp} redirectTo={start}>
         <Stack.Screen name="setup" />
       </Stack.Protected>
-      <Stack.Protected guard={setUp}>
+      <Stack.Protected guard={setUp} redirectTo={start}>
         <Stack.Screen name="index" />
+        <Stack.Screen name="add-bus" />
+        <Stack.Screen name="invite" />
+        <Stack.Screen name="assign" />
+        <Stack.Screen name="offer" />
+        <Stack.Screen name="start-day" />
+        <Stack.Screen name="end-day" />
+        <Stack.Screen name="record-cash" />
+        <Stack.Screen name="add-cost" />
+        <Stack.Screen name="check-cash" />
+        <Stack.Screen name="day-settlement" />
+        <Stack.Screen name="history" />
+        <Stack.Screen name="pay" />
+        <Stack.Screen name="correct-entry" />
+        <Stack.Screen name="demo" />
         <Stack.Screen name="owner" />
         <Stack.Screen name="driver" />
         <Stack.Screen name="confirm" />

@@ -9,7 +9,7 @@
     "test": "npm run test --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "sync:functions": "node scripts/sync-shared.mjs",
-    "check:functions": "node scripts/sync-shared.mjs && cd supabase/functions && npx -y deno@2 check command/index.ts outbox-relay/index.ts send-sms-hook/index.ts",
+    "check:functions": "node scripts/sync-shared.mjs && cd supabase/functions && npx -y deno@2 check --no-lock --config command/deno.json command/index.ts && npx -y deno@2 check --no-lock --config outbox-relay/deno.json outbox-relay/index.ts && npx -y deno@2 check --no-lock --config send-sms-hook/deno.json send-sms-hook/index.ts",
     "mobile": "npm run start -w @dt/mobile"
   },
   "overrides": {

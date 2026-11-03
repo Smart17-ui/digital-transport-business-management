@@ -55,7 +55,7 @@ export async function refreshSettlement(db: Db, tripDayId: string): Promise<Sett
     await db.query(
       `insert into settlements (business_id, trip_day_id, arrangement_id, version, owed_for_day_ngwee,
          net_balance_ngwee, provisional, statement)
-       values ($1, $2, $3, $4, $5, $6, $7, $8)`,
+       values ($1, $2, $3, $4, $5, $6, $7, $8::text::jsonb)`,
       [
         day.snapshot.businessId,
         tripDayId,

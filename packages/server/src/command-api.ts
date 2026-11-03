@@ -34,6 +34,7 @@ const handlers: { [T in CommandType]: Handler<T> } = {
   correct_entry: ledger.correctEntry,
   claim_payment: payments.claimPayment,
   decide_payment: payments.decidePayment,
+  reverse_payment: payments.reversePayment,
 };
 
 /** Unique constraints that mean a rule was broken rather than a server fault. */
@@ -44,6 +45,7 @@ const CONSTRAINT_CODES: Record<string, string> = {
   entry_confirmations_entry_id_key: 'entry.already_decided',
   expense_decisions_expense_id_key: 'expense.already_decided',
   payment_decisions_payment_id_key: 'payment.already_decided',
+  payment_reversals_payment_id_key: 'payment.already_reversed',
   income_entries_one_reversal: 'correction.already_corrected',
   expenses_one_reversal: 'correction.already_corrected',
   memberships_one_active: 'invite.already_member',
@@ -75,7 +77,7 @@ export async function handleCommand(
       const ctx = await buildContext(db, userId, command.businessId, now, command.deviceTime);
       const data = await dispatch(ctx, command);
       for (const event of ctx.events) {
-        await db.query('insert into outbox (business_id, event_type, payload) values ($1, $2, $3)', [
+        await db.query('insert into outbox (business_id, event_type, payload) values ($1, $2, $3::text::jsonb)', [
           event.businessId,
           event.type,
           JSON.stringify(event),
@@ -84,7 +86,7 @@ export async function handleCommand(
       const result: CommandResult = { ok: true, clientId: command.clientId, data };
       await db.query(
         `insert into command_log (client_id, user_id, business_id, type, result, device_time, received_at)
-         values ($1, $2, $3, $4, $5, $6, $7)`,
+         values ($1, $2, $3, $4, $5::text::jsonb, $6, $7)`,
         [
           command.clientId,
           userId,

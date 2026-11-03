@@ -88,7 +88,7 @@ export function calculateSettlement(
 }
 
 export type PaymentParty = 'driver' | 'owner';
-export type PaymentStatus = 'claimed' | 'confirmed' | 'rejected';
+export type PaymentStatus = 'claimed' | 'confirmed' | 'rejected' | 'reversed';
 
 export interface SettlementPayment {
   id: string;
@@ -151,6 +151,57 @@ export function validatePaymentConfirmation(payment: SettlementPayment, confirme
  */
 export function arrearsFrom(days: readonly { owedForDay: Ngwee; paid: Ngwee }[]): Ngwee {
   return sum(days.map((d) => d.owedForDay - d.paid));
+}
+
+export interface DayBalance {
+  id: string;
+  /** Positive: the Driver owes the Owner for this day. */
+  owedForDay: Ngwee;
+  /** Confirmed payments recorded against this day. Positive: the Driver paid the Owner. */
+  paid: Ngwee;
+}
+
+export interface PaymentAllocation {
+  /**
+   * What is still unpaid from each day once every payment is applied to the
+   * oldest debt first. Positive: the Driver still owes. Negative: the Owner does.
+   */
+  left: Record<string, Ngwee>;
+  /** The true running balance across all the days. */
+  balance: Ngwee;
+}
+
+/**
+ * Debts are settled oldest first, whichever day a payment was recorded on, so an
+ * old day stops showing a debt that a later payment has already covered. Pass the
+ * days of one Driver, oldest first. This only explains the balance: arrears and
+ * settlements are worked out from the same figures and do not depend on it.
+ */
+export function allocatePayments(days: readonly DayBalance[]): PaymentAllocation {
+  const left: Record<string, Ngwee> = {};
+  // What can pay debts: money paid to the Owner, and days that left the Owner owing the Driver.
+  let credit = sum(days.map((d) => d.paid + Math.max(-d.owedForDay, 0)));
+
+  for (const day of days) {
+    if (day.owedForDay <= 0) {
+      left[day.id] = 0;
+      continue;
+    }
+    const used = Math.min(Math.max(credit, 0), day.owedForDay);
+    left[day.id] = day.owedForDay - used;
+    credit -= used;
+  }
+
+  // Credit left over is money the Owner owes, shown against the newest days that created it.
+  for (const day of [...days].reverse()) {
+    if (credit <= 0) break;
+    if (day.owedForDay >= 0) continue;
+    const owed = Math.min(credit, -day.owedForDay);
+    left[day.id] = -owed;
+    credit -= owed;
+  }
+
+  return { left, balance: sum(days.map((d) => d.owedForDay - d.paid)) };
 }
 
 function direction(balance: Ngwee): { whoOwesWhom: WhoOwesWhom; amountOwed: Ngwee } {

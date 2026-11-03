@@ -21,7 +21,7 @@ export function SectionTitle({ children }: { children: ReactNode }) {
 type Tone = 'ok' | 'waiting' | 'problem' | 'neutral';
 
 const TONES: Record<Tone, { background: string; color: string }> = {
-  ok: { background: colors.primarySoft, color: colors.primary },
+  ok: { background: colors.owedSoft, color: colors.owed },
   waiting: { background: colors.waitingSoft, color: colors.waiting },
   problem: { background: colors.owesSoft, color: colors.owes },
   neutral: { background: colors.border, color: colors.muted },
@@ -104,7 +104,7 @@ export function ProgressBar({ part, whole }: { part: number; whole: number }) {
 export function Note({ children }: { children: ReactNode }) {
   return (
     <View style={styles.note}>
-      <Icon name="info" size={20} color={colors.primary} />
+      <Icon name="info" size={20} color={colors.text} />
       <Text style={styles.noteText}>{children}</Text>
     </View>
   );
@@ -141,7 +141,7 @@ export function SampleBar({ showOffline }: { showOffline?: boolean }) {
           <Switch value={offline} onValueChange={setOffline} accessibilityLabel="Try no signal" />
         </View>
       ) : null}
-      <Pressable onPress={() => router.dismissTo('/')} accessibilityRole="button" hitSlop={12}>
+      <Pressable onPress={() => router.dismissTo('/demo')} accessibilityRole="button" hitSlop={12}>
         <Text style={styles.sampleLink}>Switch role</Text>
       </Pressable>
     </View>
@@ -185,11 +185,11 @@ const styles = StyleSheet.create({
   rowValue: { fontSize: 16, fontWeight: '600', color: colors.text, fontVariant: ['tabular-nums'] },
   strong: { fontWeight: '800' },
   track: { height: 10, borderRadius: 5, backgroundColor: colors.border, overflow: 'hidden' },
-  fill: { height: '100%', borderRadius: 5, backgroundColor: colors.primary },
+  fill: { height: '100%', borderRadius: 5, backgroundColor: colors.owed },
   note: {
     flexDirection: 'row',
     gap: space(2.5),
-    backgroundColor: colors.primarySoft,
+    backgroundColor: colors.tint,
     borderRadius: radius.control,
     padding: space(3.5),
     marginTop: space(4),
@@ -199,12 +199,12 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: colors.primarySoft,
+    backgroundColor: colors.tint,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  avatarDark: { backgroundColor: colors.text },
-  avatarText: { fontSize: 15, fontWeight: '800', color: colors.primary },
+  avatarDark: { backgroundColor: colors.dark },
+  avatarText: { fontSize: 15, fontWeight: '800', color: colors.text },
   avatarTextDark: { color: colors.surface },
   offline: {
     flexDirection: 'row',
@@ -226,5 +226,5 @@ const styles = StyleSheet.create({
   },
   sampleSwitch: { flexDirection: 'row', alignItems: 'center', gap: space(1) },
   sampleText: { fontSize: 12, fontWeight: '600', color: colors.muted },
-  sampleLink: { fontSize: 12, fontWeight: '700', color: colors.primary, textDecorationLine: 'underline' },
+  sampleLink: { fontSize: 12, fontWeight: '700', color: colors.text, textDecorationLine: 'underline' },
 });

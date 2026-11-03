@@ -101,7 +101,7 @@ export async function proposeArrangement(ctx: CommandContext, p: CommandPayload<
   await ctx.db.query(
     `insert into arrangements (id, business_id, vehicle_id, driver_id, type, terms, fuel_bearer,
        other_costs_bearer, fuel_float_ngwee, effective_from, proposed_by, proposed_at)
-     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+     values ($1, $2, $3, $4, $5, $6::text::jsonb, $7, $8, $9, $10, $11, $12)`,
     [
       p.arrangementId, businessId, p.vehicleId, p.driverId, p.type, JSON.stringify(p.terms), p.fuelBearer,
       p.otherCostsBearer, p.fuelFloat, p.effectiveFrom, ctx.userId, ctx.now,

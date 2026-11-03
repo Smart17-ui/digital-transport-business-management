@@ -259,7 +259,7 @@ export async function correctEntry(ctx: CommandContext, p: CommandPayload<'corre
 
   await ctx.db.query(
     `insert into audit_entries (business_id, entity_type, entity_id, action, actor_id, reason, details, at)
-     values ($1, $2, $3, 'correct', $4, $5, $6, $7)`,
+     values ($1, $2, $3, 'correct', $4, $5, $6::text::jsonb, $7)`,
     [
       businessId,
       p.entryType === 'income' ? 'income_entry' : 'expense',

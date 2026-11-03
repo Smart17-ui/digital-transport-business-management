@@ -28,7 +28,9 @@ export function correctIncome(
   request: CorrectionRequest,
   alreadyCorrected: boolean,
 ): Correction<IncomeEntry> {
-  assertCorrectable(original.status === 'confirmed', original.reversesId, alreadyCorrected, request);
+  // A disputed entry can be corrected too: that is how a dispute is resolved. Its
+  // reversal cancels nothing, because a disputed entry was never counted (TripDay).
+  assertCorrectable(original.status !== 'pending', original.reversesId, alreadyCorrected, request);
   const base = {
     ...original,
     recordedBy: request.actorId,

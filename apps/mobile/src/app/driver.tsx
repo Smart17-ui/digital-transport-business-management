@@ -124,7 +124,7 @@ function Action(props: { icon: IconName; label: string; primary?: boolean; onPre
       onPress={props.onPress}
       style={({ pressed }) => [styles.action, props.primary && styles.actionPrimary, pressed && styles.pressed]}
     >
-      <Icon name={props.icon} color={props.primary ? colors.primaryText : colors.primary} />
+      <Icon name={props.icon} color={props.primary ? colors.primaryText : colors.text} />
       <Text style={[styles.actionText, props.primary && styles.actionTextPrimary]}>{props.label}</Text>
     </Pressable>
   );
@@ -136,10 +136,10 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', gap: space(3), marginBottom: space(4) },
   name: { fontSize: 20, fontWeight: '800', color: colors.text },
   detail: { fontSize: 14, color: colors.muted, marginTop: 2 },
-  hero: { backgroundColor: colors.primary, borderRadius: radius.card, padding: space(5) },
-  heroLabel: { fontSize: 15, fontWeight: '600', color: colors.onPrimaryMuted },
-  heroAmount: { fontSize: 46, fontWeight: '800', color: colors.primaryText, marginVertical: space(1), fontVariant: ['tabular-nums'] },
-  heroNote: { fontSize: 13, color: colors.onPrimaryMuted },
+  hero: { backgroundColor: colors.dark, borderRadius: radius.card, padding: space(5) },
+  heroLabel: { fontSize: 15, fontWeight: '600', color: colors.onDarkMuted },
+  heroAmount: { fontSize: 46, fontWeight: '800', color: colors.onDark, marginVertical: space(1), fontVariant: ['tabular-nums'] },
+  heroNote: { fontSize: 13, color: colors.onDarkMuted },
   owed: {
     backgroundColor: colors.surface,
     borderWidth: 1,

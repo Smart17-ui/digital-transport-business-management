@@ -1,4 +1,4 @@
-import { Stack, useLocalSearchParams } from 'expo-router';
+import { Redirect, Stack, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Button } from '@/components/ui';
@@ -46,6 +46,8 @@ export default function Verify() {
     const { error: failed } = await supabase.auth.signInWithOtp({ phone });
     if (failed) setError(codeErrorMessage(failed));
   };
+
+  if (!phone) return <Redirect href="/sign-in" />;
 
   return (
     <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -107,5 +109,5 @@ const styles = StyleSheet.create({
   error: { fontSize: 14, lineHeight: 20, color: colors.owes, marginBottom: space(3) },
   resendWait: { fontSize: 14, color: colors.muted, textAlign: 'center', marginTop: space(4) },
   resend: { alignItems: 'center', marginTop: space(4) },
-  resendLink: { fontSize: 15, fontWeight: '600', color: colors.primary, textDecorationLine: 'underline' },
+  resendLink: { fontSize: 15, fontWeight: '600', color: colors.text, textDecorationLine: 'underline' },
 });

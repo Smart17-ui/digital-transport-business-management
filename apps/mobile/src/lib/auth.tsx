@@ -20,6 +20,7 @@ type AuthStatus = 'loading' | 'signed_out' | 'unavailable' | 'ready';
 
 interface AuthState {
   status: AuthStatus;
+  userId: string | null;
   account: Account | null;
   /** Reads the account again, for example after creating or joining a business. */
   refresh: () => Promise<void>;
@@ -102,6 +103,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     else if (unavailable) status = 'unavailable';
     return {
       status,
+      userId,
       account,
       refresh: async () => {
         if (userId) await load(userId);

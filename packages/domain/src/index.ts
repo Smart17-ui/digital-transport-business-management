@@ -9,6 +9,7 @@ export * from './ledger/income-entry.ts';
 export * from './ledger/expense.ts';
 export * from './ledger/trip-day.ts';
 export * from './ledger/correction.ts';
+export * from './ledger/day-view.ts';
 export * from './settlement/settlement.ts';
 export * from './commands.ts';
 export * from './events.ts';

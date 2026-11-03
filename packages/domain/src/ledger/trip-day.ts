@@ -143,18 +143,31 @@ export class TripDay {
     return expense;
   }
 
+  /**
+   * Confirmed entries that count towards the day. The reversal of a disputed
+   * entry is left out: it marks the dispute as resolved, and has nothing to cancel.
+   */
+  private countedEntries(): IncomeEntry[] {
+    const disputed = new Set(this.incomeEntries.filter((e) => e.status === 'disputed').map((e) => e.id));
+    return this.incomeEntries.filter(
+      (e) => e.status === 'confirmed' && (e.reversesId === null || !disputed.has(e.reversesId)),
+    );
+  }
+
   /** Signed sum of confirmed takings, including corrections. */
   confirmedIncome(): Ngwee {
     return sum(
-      this.incomeEntries.filter((e) => e.kind === 'takings' && e.status === 'confirmed').map((e) => e.amount),
+      this.countedEntries()
+        .filter((e) => e.kind === 'takings')
+        .map((e) => e.amount),
     );
   }
 
   /** Cash confirmed as received by the Owner from this day (takings and remittances). */
   confirmedReceivedByOwner(): Ngwee {
     return sum(
-      this.incomeEntries
-        .filter((e) => e.status === 'confirmed' && e.receiver.kind === 'owner')
+      this.countedEntries()
+        .filter((e) => e.receiver.kind === 'owner')
         .map((e) => e.amount),
     );
   }
@@ -176,8 +189,10 @@ export class TripDay {
     );
   }
 
+  /** Entries that keep the day provisional: not yet checked, or disputed and not yet corrected. */
   unconfirmedIncome(): IncomeEntry[] {
-    return this.incomeEntries.filter((e) => e.status !== 'confirmed');
+    const corrected = new Set(this.incomeEntries.map((e) => e.reversesId));
+    return this.incomeEntries.filter((e) => e.status !== 'confirmed' && !corrected.has(e.id));
   }
 
   pendingExpenses(): Expense[] {

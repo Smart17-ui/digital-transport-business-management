@@ -1,7 +1,8 @@
 import { zambianMsisdn } from '@dt/domain';
 import { router, Stack } from 'expo-router';
 import { useState } from 'react';
-import { KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Logo } from '@/components/logo';
 import { Button } from '@/components/ui';
 import { codeErrorMessage } from '@/lib/auth-errors';
 import { supabase } from '@/lib/supabase';
@@ -32,11 +33,16 @@ export default function SignIn() {
   return (
     <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <Stack.Screen options={{ headerShown: false }} />
-      <View style={styles.body}>
+      <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
+        <View style={styles.brand}>
+          <Logo />
+        </View>
         <Text style={styles.title} accessibilityRole="header">
-          Sign in
+          Welcome
         </Text>
-        <Text style={styles.intro}>Enter your phone number. We will text you a code, so there is no password to remember.</Text>
+        <Text style={styles.intro}>
+          Enter your phone number to sign in or create your account. We will text you a code, so there is no password to remember.
+        </Text>
         <Text style={styles.label}>Phone number</Text>
         <TextInput
           style={styles.input}
@@ -49,7 +55,6 @@ export default function SignIn() {
           placeholder="097 123 4567"
           placeholderTextColor={colors.muted}
           accessibilityLabel="Phone number"
-          autoFocus
         />
         {error ? (
           <Text style={styles.error} accessibilityRole="alert">
@@ -57,14 +62,15 @@ export default function SignIn() {
           </Text>
         ) : null}
         <Button label={sending ? 'Sending...' : 'Send me a code'} disabled={sending} onPress={send} />
-      </View>
+      </ScrollView>
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
   screen: { flex: 1 },
-  body: { flex: 1, justifyContent: 'center', padding: space(5) },
+  body: { flexGrow: 1, justifyContent: 'center', padding: space(5) },
+  brand: { marginBottom: space(8) },
   title: { fontSize: 30, fontWeight: '800', color: colors.text },
   intro: { fontSize: 16, lineHeight: 23, color: colors.muted, marginTop: space(2), marginBottom: space(6) },
   label: { fontSize: 15, fontWeight: '600', color: colors.text, marginBottom: space(1.5) },

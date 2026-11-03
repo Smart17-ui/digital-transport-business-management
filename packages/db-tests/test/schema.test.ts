@@ -13,6 +13,23 @@ beforeEach(async () => {
   b = await seedBusiness(db);
 });
 
+describe('JSON columns', () => {
+  // The Edge Function's Postgres driver encoded JSON a second time, leaving text
+  // the app and the arrangement rules could not read. This driver does not, so
+  // the constraints are what catch it here and in production.
+  it('rejects JSON that has been encoded twice', async () => {
+    const insert = (terms: string) =>
+      db.query(
+        `insert into arrangements (id, business_id, vehicle_id, driver_id, type, terms, fuel_bearer, other_costs_bearer,
+           effective_from, proposed_by)
+         values ($1, $2, $3, $4, 'fixed_target', $5::text::jsonb, 'owner', 'owner', '2026-11-01', $6)`,
+        [randomUUID(), a.businessId, a.vehicleId, a.driverId, terms, a.ownerId],
+      );
+    await expect(insert(JSON.stringify(JSON.stringify({ dailyTarget: 50_000 })))).rejects.toThrow('arrangements_terms_object');
+    await insert(JSON.stringify({ dailyTarget: 50_000 }));
+  });
+});
+
 describe('append-only money tables', () => {
   it('rejects updates and deletes on income entries, even from the database owner', async () => {
     await expect(db.query('update income_entries set amount_ngwee = 1 where id = $1', [a.entryId])).rejects.toThrow(

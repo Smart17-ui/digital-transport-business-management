@@ -20,6 +20,7 @@ export const en: Record<EventType, Message> = {
   PaymentClaimed: { title: 'Payment to confirm', body: 'A settlement payment is waiting for your confirmation.' },
   PaymentConfirmed: { title: 'Payment confirmed', body: 'Your settlement payment was confirmed.' },
   PaymentDisputed: { title: 'Payment disputed', body: 'Your settlement payment was not confirmed. Open the app.' },
+  PaymentReversed: { title: 'Payment undone', body: 'A confirmed settlement payment was undone. Open the app to see why.' },
   MemberJoined: { title: 'New crew member', body: 'Someone joined your business with an invite code.' },
   MemberRemoved: {
     title: 'Access removed',

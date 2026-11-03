@@ -53,21 +53,21 @@ npm run check:functions   # Deno type check of the Edge Functions (via npx)
 
 1. Create a Supabase project. Choose the region only after the data-location question in Open points is answered.
 2. Install the Supabase CLI and link the project: `npx supabase link --project-ref <ref>`.
-3. Apply migrations: `npx supabase db push`.
-4. Sync and deploy the functions:
+3. Sync and deploy the functions, one command at a time. Each function has its own `deno.json`, which server-side bundling needs in order to find the shared code:
    ```sh
    npm run sync:functions
-   npx supabase functions deploy command
-   npx supabase functions deploy outbox-relay --no-verify-jwt
+   npx supabase functions deploy command --use-api
+   npx supabase functions deploy outbox-relay --no-verify-jwt --use-api
    npx supabase secrets set RELAY_SECRET=<random> EXPO_ACCESS_TOKEN=<optional>
    ```
+4. Apply migrations: `npx supabase db push --remote`. Deploy functions first when a migration tightens what they may write.
 5. Enable phone sign-in (Authentication → Providers → Phone) and set OTP rate limits. Codes are sent through Celcom Africa by the `send-sms-hook` function (below), so no Twilio details are needed.
 
 ### Sign-in codes by SMS (Celcom Africa)
 
 Supabase Auth generates each code and calls `send-sms-hook`, which checks the webhook signature, accepts only Zambian mobile numbers (`260` then 9 digits starting 7 or 9) and sends through Celcom's OTP endpoint. The code is never logged. Providers are tried in order, so a second gateway can be added to the list in `supabase/functions/send-sms-hook/index.ts` as a fallback.
 
-1. Deploy: `npm run sync:functions && npx supabase functions deploy send-sms-hook --no-verify-jwt`.
+1. Deploy: `npm run sync:functions && npx supabase functions deploy send-sms-hook --no-verify-jwt --use-api`.
 2. In the dashboard, open Authentication → Hooks → Send SMS hook, choose HTTPS, set the URL to `https://<project-ref>.supabase.co/functions/v1/send-sms-hook` and generate a secret.
 3. Set the secrets:
    ```sh

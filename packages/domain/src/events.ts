@@ -17,6 +17,7 @@ export const EVENT_TYPES = [
   'PaymentClaimed',
   'PaymentConfirmed',
   'PaymentDisputed',
+  'PaymentReversed',
   'MemberJoined',
   'MemberRemoved',
 ] as const;

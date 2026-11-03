@@ -118,6 +118,106 @@ describe('Version 0 money flow through the Command API', () => {
     expect(view.statement.netBalance).toBe(55_000);
   });
 
+  describe('undoing a confirmed payment', () => {
+    async function paidDay() {
+      const { tripDayId } = await workDay('2026-11-02', 80_000, 20_000);
+      const paymentId = randomUUID();
+      await ok(driver, 'claim_payment', { paymentId, tripDayId, amount: 30_000, method: 'cash' });
+      await ok(owner, 'decide_payment', { paymentId, accept: true, confirmedAmount: 30_000, reason: null });
+      return { tripDayId, paymentId };
+    }
+
+    it('makes the money owed again, here and on the next day, and keeps the history', async () => {
+      const { tripDayId, paymentId } = await paidDay();
+      const undone = await ok(owner, 'reverse_payment', { paymentId, reason: 'Tapped yes by mistake' });
+      expect(undone).toMatchObject({ state: 'unpaid', remaining: 30_000 });
+
+      const view = await viewSettlement(database, driver, tripDayId);
+      expect(view.payments[0]).toMatchObject({ id: paymentId, status: 'reversed' });
+      expect(view.position.remaining).toBe(30_000);
+
+      const next = await workDay('2026-11-03', 50_000);
+      const nextView = await viewSettlement(database, owner, next.tripDayId);
+      expect(nextView.statement.arrearsBroughtForward).toBe(30_000);
+
+      const audit = await pg.query('select 1 from audit_entries where entity_id = $1', [paymentId]);
+      expect(audit.rows).toHaveLength(1);
+    });
+
+    it('lets the driver record the real payment afterwards', async () => {
+      const { tripDayId, paymentId } = await paidDay();
+      await ok(owner, 'reverse_payment', { paymentId, reason: 'Tapped yes by mistake' });
+      await ok(driver, 'claim_payment', { paymentId: randomUUID(), tripDayId, amount: 30_000, method: 'cash' });
+    });
+
+    it('can only be done by the person paid, only on a confirmed payment, and only once', async () => {
+      const { tripDayId, paymentId } = await paidDay();
+      const byPayer = await run(driver, 'reverse_payment', { paymentId, reason: 'x' });
+      expect(byPayer).toMatchObject({ ok: false, code: 'payment.only_payee_decides' });
+
+      await ok(owner, 'reverse_payment', { paymentId, reason: 'Mistake' });
+      const twice = await run(owner, 'reverse_payment', { paymentId, reason: 'Again' });
+      expect(twice).toMatchObject({ ok: false, code: 'payment.already_reversed' });
+
+      const claimedId = randomUUID();
+      await ok(driver, 'claim_payment', { paymentId: claimedId, tripDayId, amount: 10_000, method: 'cash' });
+      const notConfirmed = await run(owner, 'reverse_payment', { paymentId: claimedId, reason: 'Too early' });
+      expect(notConfirmed).toMatchObject({ ok: false, code: 'payment.not_confirmed' });
+    });
+  });
+
+  describe('resolving a disputed entry', () => {
+    async function disputedDay() {
+      const { tripDayId } = await workDay('2026-11-02', 80_000);
+      const entry = takings(tripDayId, 30_000);
+      await ok(driver, 'record_handover', entry);
+      await ok(owner, 'decide_handover', { entryId: entry.entryId, decision: 'dispute', reason: 'I saw K20' });
+      const view = await viewSettlement(database, owner, tripDayId);
+      expect(view.statement.grossIncome).toBe(80_000);
+      expect(view.statement.provisional).toBe(true);
+      return { tripDayId, entryId: entry.entryId };
+    }
+    const correct = (originalId: string, amount: number) =>
+      ok(owner, 'correct_entry', {
+        entryType: 'income', originalId, reversalId: randomUUID(), replacementId: randomUUID(),
+        amount, borneBy: null, reason: 'Agreed with the driver',
+      });
+
+    it('counts only the corrected amount, and the day is no longer provisional', async () => {
+      const { tripDayId, entryId } = await disputedDay();
+      await correct(entryId, 20_000);
+      const { statement } = await viewSettlement(database, driver, tripDayId);
+      expect(statement.grossIncome).toBe(100_000);
+      expect(statement.provisional).toBe(false);
+    });
+
+    it('can remove the entry altogether, without taking anything off the day', async () => {
+      const { tripDayId, entryId } = await disputedDay();
+      await correct(entryId, 0);
+      const { statement } = await viewSettlement(database, owner, tripDayId);
+      expect(statement.grossIncome).toBe(80_000);
+      expect(statement.provisional).toBe(false);
+    });
+
+    it('cannot be done twice, and an entry nobody has checked cannot be corrected', async () => {
+      const { tripDayId, entryId } = await disputedDay();
+      await correct(entryId, 20_000);
+      const again = await run(owner, 'correct_entry', {
+        entryType: 'income', originalId: entryId, reversalId: randomUUID(), replacementId: randomUUID(),
+        amount: 10_000, borneBy: null, reason: 'Again',
+      });
+      expect(again).toMatchObject({ ok: false, code: 'correction.already_corrected' });
+
+      const unchecked = takings(tripDayId, 5_000);
+      await ok(driver, 'record_handover', unchecked);
+      const early = await run(owner, 'correct_entry', {
+        entryType: 'income', originalId: unchecked.entryId, reversalId: randomUUID(), replacementId: randomUUID(),
+        amount: 1_000, borneBy: null, reason: 'Too early',
+      });
+      expect(early).toMatchObject({ ok: false, code: 'correction.entry_not_locked' });
+    });
+  });
+
   it('a correction reverses and replaces the entry and recalculates', async () => {
     const { tripDayId, entryId } = await workDay('2026-11-02', 80_000);
     await ok(owner, 'correct_entry', {
