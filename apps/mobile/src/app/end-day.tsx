@@ -1,8 +1,9 @@
 import { randomUUID } from 'expo-crypto';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useRef, useState } from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text } from 'react-native';
+import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet } from 'react-native';
 import { TextField } from '@/components/form';
+import { Text } from '@/components/text';
 import { BottomActions, Button } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
 import { enqueue } from '@/lib/queue';

@@ -1,8 +1,9 @@
 import { zambianMsisdn } from '@dt/domain';
 import { router, Stack } from 'expo-router';
 import { useState } from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native';
 import { Logo } from '@/components/logo';
+import { Text, TextInput } from '@/components/text';
 import { Button } from '@/components/ui';
 import { codeErrorMessage } from '@/lib/auth-errors';
 import { supabase } from '@/lib/supabase';
@@ -78,7 +79,7 @@ const styles = StyleSheet.create({
     minHeight: TAP_TARGET,
     backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: colors.muted,
+    borderColor: colors.borderStrong,
     borderRadius: radius.control,
     paddingHorizontal: space(3.5),
     fontSize: 20,

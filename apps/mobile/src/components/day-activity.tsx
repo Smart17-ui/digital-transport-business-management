@@ -1,5 +1,6 @@
 import type { DayCost, DayEntry } from '@dt/domain';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
+import { Text } from '@/components/text';
 import { Pill } from '@/components/ui';
 import { kwacha } from '@/lib/arrangements';
 import { costCategoryLabel } from '@/lib/business';
@@ -78,8 +79,8 @@ export function DayActivity(props: { entries: DayEntry[]; costs: DayCost[]; view
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  list: { marginTop: space(3) },
-  item: { flexDirection: 'row', gap: space(3), paddingVertical: space(2.5), borderTopWidth: 1, borderTopColor: colors.border },
+  list: { marginTop: space(1) },
+  item: { flexDirection: 'row', gap: space(3), paddingVertical: space(3), borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border },
   time: { fontSize: 13, color: colors.muted, fontVariant: ['tabular-nums'] },
   label: { fontSize: 15, color: colors.text },
   note: { fontSize: 13, lineHeight: 18, color: colors.muted, marginTop: 2 },

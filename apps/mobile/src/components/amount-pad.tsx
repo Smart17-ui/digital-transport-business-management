@@ -1,6 +1,7 @@
 import { parseKwacha } from '@dt/domain';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 import { Icon } from '@/components/icons';
+import { Text } from '@/components/text';
 import { colors, radius, space, TAP_TARGET } from '@/lib/theme';
 
 const KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0', 'back'] as const;

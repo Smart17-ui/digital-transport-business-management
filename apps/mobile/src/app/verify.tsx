@@ -1,6 +1,7 @@
 import { Redirect, Stack, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, Pressable, StyleSheet, View } from 'react-native';
+import { Text, TextInput } from '@/components/text';
 import { Button } from '@/components/ui';
 import { codeErrorMessage } from '@/lib/auth-errors';
 import { supabase } from '@/lib/supabase';
@@ -96,7 +97,7 @@ const styles = StyleSheet.create({
     minHeight: TAP_TARGET + 12,
     backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: colors.muted,
+    borderColor: colors.borderStrong,
     borderRadius: radius.control,
     fontSize: 30,
     fontWeight: '700',

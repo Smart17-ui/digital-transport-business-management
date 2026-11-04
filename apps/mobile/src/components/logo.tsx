@@ -1,5 +1,6 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import Svg, { Circle, G, Rect } from 'react-native-svg';
+import { Text } from '@/components/text';
 import { brand, space } from '@/lib/theme';
 
 export function Logo({ size = 72 }: { size?: number }) {

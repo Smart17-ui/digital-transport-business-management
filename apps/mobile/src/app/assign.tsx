@@ -2,8 +2,9 @@ import type { ArrangementType, Bearer } from '@dt/domain';
 import { randomUUID } from 'expo-crypto';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useRef, useState } from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native';
 import { Choice, MoneyField, OptionCard } from '@/components/form';
+import { Text } from '@/components/text';
 import { BottomActions, Button, Card } from '@/components/ui';
 import {
   AMOUNT_LABEL,

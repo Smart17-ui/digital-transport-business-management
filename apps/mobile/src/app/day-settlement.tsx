@@ -2,10 +2,11 @@ import { parseKwacha, type SettlementPayment, type SettlementState } from '@dt/d
 import { randomUUID } from 'expo-crypto';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
-import { KeyboardAvoidingView, Platform, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { DayActivity } from '@/components/day-activity';
 import { MoneyField } from '@/components/form';
-import { BottomActions, Button, Card, MoneyRow, Note, Pill, SectionTitle } from '@/components/ui';
+import { Text, TextInput } from '@/components/text';
+import { BottomActions, Button, Card, MoneyRow, Note, Pill, ScreenLoading, SectionTitle } from '@/components/ui';
 import { formatDay, kwacha } from '@/lib/arrangements';
 import { useAuth } from '@/lib/auth';
 import { costCategoryLabel, fetchDaySettlement, useScreenData } from '@/lib/business';
@@ -98,11 +99,11 @@ export default function DaySettlement() {
         {title}
         {failed ? (
           <>
-            <Text style={styles.message}>Could not load the settlement. It needs signal. Check yours and try again.</Text>
+            <Text style={styles.message}>Could not load the settlement. Check your signal and try again. If your signal is fine, the problem is on our side.</Text>
             <Button variant="secondary" label="Try again" onPress={reload} />
           </>
         ) : (
-          <Text style={styles.message}>Loading...</Text>
+          <ScreenLoading />
         )}
       </View>
     );
@@ -428,7 +429,7 @@ const styles = StyleSheet.create({
     minHeight: 88,
     backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: colors.muted,
+    borderColor: colors.borderStrong,
     borderRadius: radius.control,
     padding: space(3),
     fontSize: 16,

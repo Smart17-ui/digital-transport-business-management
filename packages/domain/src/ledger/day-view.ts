@@ -43,6 +43,8 @@ export interface DayCost {
   amount: number;
   litres: number | null;
   paidBy: 'driver_cash' | 'advance' | 'owner';
+  /** Who the server said bears this cost. Absent until it has been sent. */
+  borneBy?: 'owner' | 'driver';
   note: string;
   at: string;
   unsent: boolean;

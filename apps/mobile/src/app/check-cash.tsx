@@ -1,7 +1,8 @@
 import { randomUUID } from 'expo-crypto';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native';
+import { Text, TextInput } from '@/components/text';
 import { BottomActions, Button } from '@/components/ui';
 import { kwacha } from '@/lib/arrangements';
 import { useAuth } from '@/lib/auth';
@@ -136,7 +137,7 @@ const styles = StyleSheet.create({
     minHeight: 88,
     backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: colors.muted,
+    borderColor: colors.borderStrong,
     borderRadius: radius.control,
     padding: space(3),
     fontSize: 16,

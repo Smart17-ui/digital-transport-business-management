@@ -11,5 +11,6 @@ export * from './ledger/trip-day.ts';
 export * from './ledger/correction.ts';
 export * from './ledger/day-view.ts';
 export * from './settlement/settlement.ts';
+export * from './settlement/estimate.ts';
 export * from './commands.ts';
 export * from './events.ts';

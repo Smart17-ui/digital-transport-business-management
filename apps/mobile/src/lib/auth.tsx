@@ -1,5 +1,7 @@
 import type { Session } from '@supabase/supabase-js';
+import Storage from 'expo-sqlite/kv-store';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { CONSENT_SCOPE, NOTICE_VERSION } from '@/lib/consent';
 import { secureStorage } from '@/lib/secure-storage';
 import { supabase } from '@/lib/supabase';
 
@@ -8,6 +10,8 @@ export interface Account {
   phone: string | null;
   /** The user's current business; a person belongs to one in Version 0's screens. */
   business: { id: string; name: string; role: string } | null;
+  /** Whether this person has agreed to the current data notice. */
+  consented: boolean;
 }
 
 /**
@@ -40,6 +44,14 @@ async function fetchAccount(userId: string): Promise<Account> {
     .order('joined_at', { ascending: false })
     .limit(1);
   if (memberships.error) throw memberships.error;
+  const consents = await supabase
+    .from('consents')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('scope', CONSENT_SCOPE)
+    .eq('notice_version', NOTICE_VERSION)
+    .limit(1);
+  if (consents.error) throw consents.error;
   const row = memberships.data[0] as unknown as
     | { role: string; business_id: string; businesses: { name: string } | null }
     | undefined;
@@ -47,6 +59,7 @@ async function fetchAccount(userId: string): Promise<Account> {
     displayName: profile.data.display_name,
     phone: profile.data.phone,
     business: row ? { id: row.business_id, name: row.businesses?.name ?? '', role: row.role } : null,
+    consented: consents.data.length > 0,
   };
 }
 
@@ -77,7 +90,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!isCurrent()) return;
       const parsed = saved ? (JSON.parse(saved) as { userId: string; account: Account }) : null;
       if (parsed?.userId === id) {
-        setAccount(parsed.account);
+        // A copy saved before consent existed must not lock a driver out with no signal; the next good read corrects it.
+        setAccount({ ...parsed.account, consented: parsed.account.consented ?? true });
         setUnavailable(false);
       } else {
         setUnavailable(true);
@@ -110,6 +124,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       },
       signOut: async () => {
         await secureStorage.removeItem(ACCOUNT_KEY);
+        // The saved copy of this person's business goes too. Unsent entries stay, to send when they sign back in.
+        if (userId) {
+          const keys = await Storage.getAllKeys();
+          await Storage.multiRemove(keys.filter((key) => key.startsWith(`dt.driver-overview.${userId}.`)));
+        }
         // Local, so signing out works with no signal.
         await supabase.auth.signOut({ scope: 'local' });
       },

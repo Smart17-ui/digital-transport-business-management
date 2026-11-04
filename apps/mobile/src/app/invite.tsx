@@ -1,7 +1,8 @@
 import { randomUUID } from 'expo-crypto';
 import { Stack } from 'expo-router';
 import { useRef, useState } from 'react';
-import { ScrollView, Share, StyleSheet, Text } from 'react-native';
+import { ScrollView, Share, StyleSheet } from 'react-native';
+import { Text } from '@/components/text';
 import { BottomActions, Button, Card } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
 import { reasonFor, sendCommand } from '@/lib/commands';

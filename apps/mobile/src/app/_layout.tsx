@@ -1,18 +1,22 @@
+import { Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold } from '@expo-google-fonts/inter';
+import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { Text } from '@/components/text';
 import { Button } from '@/components/ui';
 import { AuthProvider, useAuth } from '@/lib/auth';
-import { SampleProvider } from '@/lib/sample';
-import { colors, space } from '@/lib/theme';
+import { colors, space, type } from '@/lib/theme';
 
 export default function RootLayout() {
+  const [loaded, error] = useFonts({ Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold });
+  // Should the fonts fail, the app still works with the phone's own.
+  if (!loaded && !error) return null;
+
   return (
     <AuthProvider>
-      <SampleProvider>
-        <StatusBar style="dark" />
-        <Routes />
-      </SampleProvider>
+      <StatusBar style="dark" />
+      <Routes />
     </AuthProvider>
   );
 }
@@ -23,7 +27,7 @@ function Routes() {
   if (status === 'loading') {
     return (
       <View style={styles.centre}>
-        <ActivityIndicator size="large" color={colors.primary} />
+        <ActivityIndicator size="large" color={colors.muted} />
       </View>
     );
   }
@@ -38,15 +42,19 @@ function Routes() {
   }
 
   const signedIn = status === 'ready';
-  const setUp = signedIn && !!account?.displayName && !!account.business;
+  const consented = signedIn && !!account?.consented;
+  const setUp = consented && !!account?.displayName && !!account.business;
   // Named outright: without it the router falls back to the shortest route name, which is /verify.
-  const start = !signedIn ? '/sign-in' : !setUp ? '/setup' : '/';
+  const start = !signedIn ? '/sign-in' : !consented ? '/consent' : !setUp ? '/setup' : '/';
 
   return (
     <Stack
       screenOptions={{
         headerStyle: { backgroundColor: colors.surface },
         headerTintColor: colors.text,
+        headerTitleStyle: { fontFamily: 'Inter_600SemiBold', fontSize: 17 },
+        headerShadowVisible: false,
+        headerBackButtonDisplayMode: 'minimal',
         contentStyle: { backgroundColor: colors.background },
       }}
     >
@@ -54,11 +62,15 @@ function Routes() {
         <Stack.Screen name="sign-in" />
         <Stack.Screen name="verify" />
       </Stack.Protected>
-      <Stack.Protected guard={signedIn && !setUp} redirectTo={start}>
+      <Stack.Protected guard={signedIn && !consented} redirectTo={start}>
+        <Stack.Screen name="consent" />
+      </Stack.Protected>
+      <Stack.Protected guard={consented && !setUp} redirectTo={start}>
         <Stack.Screen name="setup" />
       </Stack.Protected>
       <Stack.Protected guard={setUp} redirectTo={start}>
         <Stack.Screen name="index" />
+        <Stack.Screen name="bus" />
         <Stack.Screen name="add-bus" />
         <Stack.Screen name="invite" />
         <Stack.Screen name="assign" />
@@ -72,13 +84,6 @@ function Routes() {
         <Stack.Screen name="history" />
         <Stack.Screen name="pay" />
         <Stack.Screen name="correct-entry" />
-        <Stack.Screen name="demo" />
-        <Stack.Screen name="owner" />
-        <Stack.Screen name="driver" />
-        <Stack.Screen name="confirm" />
-        <Stack.Screen name="settlement" />
-        <Stack.Screen name="handover" />
-        <Stack.Screen name="calculator" />
       </Stack.Protected>
     </Stack>
   );
@@ -93,5 +98,5 @@ const styles = StyleSheet.create({
     padding: space(6),
     backgroundColor: colors.background,
   },
-  message: { fontSize: 16, lineHeight: 23, color: colors.text, textAlign: 'center' },
+  message: { ...type.body, color: colors.text, textAlign: 'center' },
 });

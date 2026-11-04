@@ -113,6 +113,8 @@ export interface DriverOverview {
   entries: DayEntry[];
   costs: DayCost[];
   paymentsToCheck: PaymentToCheck[];
+  /** What each of this driver's days left owing, as last read, for the estimate when there is no signal. */
+  balances: { id: string; left: number }[];
   /** True when this is the copy saved on the phone, because the server could not be reached. */
   saved: boolean;
 }
@@ -238,7 +240,7 @@ async function fetchCosts(dayIds: string[]): Promise<DayCost[]> {
   if (dayIds.length === 0) return [];
   const { data, error } = await supabase
     .from('expenses_v')
-    .select('id, trip_day_id, category, reverses_id, amount_ngwee, litres, paid_by, note, device_time, server_time')
+    .select('id, trip_day_id, category, reverses_id, amount_ngwee, litres, paid_by, borne_by, note, device_time, server_time')
     .in('trip_day_id', dayIds);
   if (error) throw error;
   return data.map((row) => ({
@@ -249,6 +251,7 @@ async function fetchCosts(dayIds: string[]): Promise<DayCost[]> {
     amount: Number(row.amount_ngwee),
     litres: row.litres === null ? null : Number(row.litres),
     paidBy: row.paid_by,
+    borneBy: row.borne_by,
     note: row.note,
     at: row.device_time ?? row.server_time,
     unsent: false,
@@ -508,15 +511,17 @@ export function useDriverOverview(businessId: string, userId: string) {
   const load = useCallback(async (): Promise<DriverOverview> => {
     const key = `dt.driver-overview.${userId}.${businessId}`;
     try {
-      const [buses, arrangements, days, paymentsToCheck] = await Promise.all([
+      const [buses, arrangements, days, paymentsToCheck, balanceMap] = await Promise.all([
         fetchBuses(businessId),
         fetchArrangements(businessId),
         fetchDays(businessId),
         fetchPaymentsToCheck(businessId, 'owner'),
+        fetchBalances(businessId, userId),
       ]);
       const dayIds = days.map((d) => d.id);
       const [entries, costs] = await Promise.all([fetchEntries(dayIds), fetchCosts(dayIds)]);
-      const overview = { buses, arrangements, days, entries, costs, paymentsToCheck, saved: false };
+      const balances = [...balanceMap].map(([id, b]) => ({ id, left: b.owedForDay - b.paid }));
+      const overview = { buses, arrangements, days, entries, costs, paymentsToCheck, balances, saved: false };
       await Storage.setItem(key, JSON.stringify(overview));
       return overview;
     } catch (failure) {
@@ -526,6 +531,7 @@ export function useDriverOverview(businessId: string, userId: string) {
         entries: [],
         costs: [],
         paymentsToCheck: [],
+        balances: [],
         ...(JSON.parse(saved) as Partial<DriverOverview>),
         saved: true,
       } as DriverOverview;

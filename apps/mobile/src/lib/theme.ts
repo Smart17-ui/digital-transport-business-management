@@ -14,7 +14,8 @@ export const colors = {
   surface: '#FFFFFF',
   text: '#12151B',
   muted: '#5B626C',
-  border: '#DFE2E7',
+  border: '#E4E7EB',
+  borderStrong: '#8E96A1',
   tint: '#ECEEF2',
   primary: brand.coral,
   primaryText: brand.dark,
@@ -31,7 +32,16 @@ export const colors = {
 
 export const space = (n: number) => n * 4;
 
-export const radius = { card: 16, control: 12, pill: 999 };
+export const radius = { card: 14, control: 12, pill: 999 };
+
+/** The only text sizes in the app. Fewer sizes is most of what makes a screen look calm. */
+export const type = {
+  display: { fontSize: 36, lineHeight: 42, fontWeight: '700' },
+  title: { fontSize: 22, lineHeight: 28, fontWeight: '700' },
+  heading: { fontSize: 16, lineHeight: 22, fontWeight: '600' },
+  body: { fontSize: 15, lineHeight: 22 },
+  small: { fontSize: 13, lineHeight: 18 },
+} as const;
 
 /** Smallest comfortable tap target, for use with one hand on a moving bus. */
 export const TAP_TARGET = 52;

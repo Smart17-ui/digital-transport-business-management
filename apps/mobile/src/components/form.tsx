@@ -1,4 +1,5 @@
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
+import { Text, TextInput } from '@/components/text';
 import { colors, radius, space, TAP_TARGET } from '@/lib/theme';
 
 export function TextField(props: {
@@ -36,12 +37,13 @@ export function MoneyField(props: { label: string; value: string; onChange: (v: 
     <View style={styles.field}>
       <Text style={styles.label}>{props.label}</Text>
       <TextInput
-        style={styles.input}
+        style={styles.textInput}
         value={props.value}
         onChangeText={props.onChange}
         keyboardType="decimal-pad"
         placeholder="0"
         placeholderTextColor={colors.muted}
+        accessibilityLabel={props.label}
       />
       {props.hint ? <Text style={styles.hint}>{props.hint}</Text> : null}
     </View>
@@ -99,25 +101,15 @@ export function Choice<T extends string>(props: {
 
 const styles = StyleSheet.create({
   field: { marginBottom: space(4) },
-  label: { fontSize: 15, fontWeight: '600', color: colors.text, marginBottom: space(1.5) },
-  input: {
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 10,
-    paddingHorizontal: space(3.5),
-    paddingVertical: space(3),
-    fontSize: 20,
-    color: colors.text,
-  },
+  label: { fontSize: 14, lineHeight: 20, fontWeight: '500', color: colors.text, marginBottom: space(1.5) },
   textInput: {
     minHeight: TAP_TARGET,
     backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: colors.muted,
+    borderColor: colors.borderStrong,
     borderRadius: radius.control,
     paddingHorizontal: space(3.5),
-    fontSize: 17,
+    fontSize: 16,
     color: colors.text,
   },
   card: {
@@ -128,16 +120,17 @@ const styles = StyleSheet.create({
     padding: space(4),
     marginBottom: space(2.5),
   },
-  cardSelected: { borderColor: colors.primary, borderWidth: 2 },
+  cardSelected: { borderColor: colors.primary, borderWidth: 2, padding: space(4) - 1 },
   cardDisabled: { opacity: 0.5 },
-  cardTitle: { fontSize: 16, fontWeight: '700', color: colors.text },
-  cardDetail: { fontSize: 14, color: colors.muted, marginTop: 2 },
-  hint: { fontSize: 13, color: colors.muted, marginTop: space(1) },
+  cardTitle: { fontSize: 15, lineHeight: 22, fontWeight: '600', color: colors.text },
+  cardDetail: { fontSize: 13, lineHeight: 18, color: colors.muted, marginTop: 2 },
+  hint: { fontSize: 13, lineHeight: 18, color: colors.muted, marginTop: space(1) },
   choice: { flexDirection: 'row', gap: space(2), marginBottom: space(4) },
   option: {
     flex: 1,
-    paddingVertical: space(3),
-    borderRadius: 10,
+    minHeight: 44,
+    justifyContent: 'center',
+    borderRadius: radius.control,
     borderWidth: 1,
     borderColor: colors.border,
     backgroundColor: colors.surface,

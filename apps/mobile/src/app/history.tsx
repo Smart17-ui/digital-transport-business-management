@@ -1,8 +1,9 @@
 import { router, Stack } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { Icon } from '@/components/icons';
-import { Button, Card, Pill } from '@/components/ui';
+import { Text } from '@/components/text';
+import { Button, Card, Pill, ScreenLoading } from '@/components/ui';
 import { formatDay, kwacha } from '@/lib/arrangements';
 import { useAuth } from '@/lib/auth';
 import { fetchHistory, useScreenData, type HistoryDay } from '@/lib/business';
@@ -32,10 +33,11 @@ export default function History() {
       <Stack.Screen options={{ title: 'Past days' }} />
       {failed && !days ? (
         <View style={styles.problem}>
-          <Text style={styles.message}>Could not load past days. This needs signal. Check yours and try again.</Text>
+          <Text style={styles.message}>Could not load past days. Check your signal and try again. If your signal is fine, the problem is on our side.</Text>
           <Button variant="secondary" label="Try again" onPress={reload} />
         </View>
       ) : null}
+      {!days && !failed ? <ScreenLoading /> : null}
       {days && days.length === 0 ? <Text style={styles.message}>No finished days yet.</Text> : null}
       {days && days.length > 0 ? (
         <>
