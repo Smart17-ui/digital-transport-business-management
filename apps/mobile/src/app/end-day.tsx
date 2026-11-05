@@ -7,7 +7,7 @@ import { Text } from '@/components/text';
 import { BottomActions, Button } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
 import { enqueue } from '@/lib/queue';
-import { colors, space } from '@/lib/theme';
+import { colors, space, themedStyles } from '@/lib/theme';
 
 export default function EndDay() {
   const params = useLocalSearchParams<{ day: string; plate: string; start: string }>();
@@ -58,11 +58,11 @@ export default function EndDay() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   flex: { flex: 1 },
   content: { padding: space(4), paddingBottom: space(8) },
   intro: { fontSize: 16, lineHeight: 23, color: colors.muted, marginBottom: space(5) },
   error: { fontSize: 14, lineHeight: 20, color: colors.owes },
   distance: { fontSize: 18, fontWeight: '700', color: colors.text },
   small: { fontSize: 14, lineHeight: 20, color: colors.muted, marginTop: space(4) },
-});
+}));

@@ -72,6 +72,11 @@ const payloads = {
     receiptPath: v.nullable(v.string(300)),
     borneByOverride: v.nullable(bearer),
   }),
+  decide_expense: v.object({
+    expenseId: v.uuid(),
+    accept: v.boolean(),
+    reason: v.nullable(v.string(300)),
+  }),
   correct_entry: v.object({
     entryType: v.oneOf(['income', 'expense']),
     originalId: v.uuid(),
@@ -94,6 +99,18 @@ const payloads = {
     reason: v.nullable(v.string(300)),
   }),
   reverse_payment: v.object({ paymentId: v.uuid(), reason: v.nonEmpty(300) }),
+  report_day: v.object({
+    reportId: v.uuid(),
+    vehicleId: v.uuid(),
+    serviceDate: v.date(),
+    kind: v.oneOf(['breakdown', 'off_road', 'sick', 'other']),
+    reason: v.nonEmpty(300),
+  }),
+  decide_report: v.object({
+    reportId: v.uuid(),
+    accept: v.boolean(),
+    reason: v.nullable(v.string(300)),
+  }),
   remove_member: v.object({ userId: v.uuid() }),
   record_consent: v.object({ scope: v.nonEmpty(40), noticeVersion: v.nonEmpty(20) }),
   set_profile: v.object({ displayName: v.nonEmpty(80), language: v.oneOf(['en', 'bem', 'nya']) }),

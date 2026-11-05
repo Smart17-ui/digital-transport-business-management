@@ -3,7 +3,7 @@ import { randomUUID } from 'expo-crypto';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useRef, useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native';
-import { Choice, MoneyField, OptionCard } from '@/components/form';
+import { MoneyField, OptionCard } from '@/components/form';
 import { Text } from '@/components/text';
 import { BottomActions, Button, Card } from '@/components/ui';
 import {
@@ -17,12 +17,7 @@ import {
 import { useAuth } from '@/lib/auth';
 import { useOwnerOverview } from '@/lib/business';
 import { reasonFor, sendCommand } from '@/lib/commands';
-import { colors, space } from '@/lib/theme';
-
-const BEARERS = [
-  { value: 'owner', label: 'Owner' },
-  { value: 'driver', label: 'Driver' },
-] as const;
+import { colors, space, themedStyles } from '@/lib/theme';
 
 export default function Assign() {
   const { bus: busId } = useLocalSearchParams<{ bus: string }>();
@@ -34,8 +29,10 @@ export default function Assign() {
   const [type, setType] = useState<ArrangementType | null>(null);
   const [amount, setAmount] = useState('');
   const [totalPrice, setTotalPrice] = useState('');
-  const [fuelBearer, setFuelBearer] = useState<Bearer | null>(null);
-  const [otherCostsBearer, setOtherCostsBearer] = useState<Bearer | null>(null);
+  // The driver pays costs from the takings at the time, and approved costs come off what the owner is due.
+  // In the settlement that makes the owner the one who bears them.
+  const fuelBearer: Bearer = 'owner';
+  const otherCostsBearer: Bearer = 'owner';
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   // Reused only for the same terms: a retry after lost signal must not send a second offer,
@@ -46,10 +43,11 @@ export default function Assign() {
   const onBus = (overview?.arrangements ?? []).filter((a) => a.vehicleId === busId);
   const waitingOn = (driverId: string) => onBus.some((a) => a.driverId === driverId && a.status === 'proposed');
   const available = (overview?.drivers ?? []).filter((d) => !waitingOn(d.id));
+  const currentDriver = overview?.drivers.find((d) => onBus.some((a) => a.driverId === d.id && a.status === 'active'));
   const driverId = chosenDriver ?? (available.length === 1 ? available[0]!.id : null);
   const driver = overview?.drivers.find((d) => d.id === driverId);
   const terms = type ? buildTerms(type, amount, totalPrice) : null;
-  const ready = !!bus && !!driverId && !!type && !!terms && !!fuelBearer && !!otherCostsBearer;
+  const ready = !!bus && !!driverId && !!type && !!terms;
 
   const chooseType = (next: ArrangementType) => {
     setType(next);
@@ -58,7 +56,7 @@ export default function Assign() {
   };
 
   const send = async () => {
-    if (!busId || !driverId || !type || !terms || !fuelBearer || !otherCostsBearer) return;
+    if (!busId || !driverId || !type || !terms) return;
     const key = JSON.stringify([busId, driverId, type, terms, fuelBearer, otherCostsBearer]);
     if (attempt.current.key !== key) attempt.current = { key, arrangementId: randomUUID(), clientId: randomUUID() };
     setError(null);
@@ -107,8 +105,10 @@ export default function Assign() {
                 const detail = waitingOn(d.id)
                   ? 'Still has an offer to answer on this bus.'
                   : agreed
-                    ? 'Already agreed on this bus. New terms replace the old ones if they accept.'
-                    : `+${d.phone ?? ''}`;
+                    ? 'On this bus now. New terms replace the old ones if they accept.'
+                    : currentDriver
+                      ? `If they accept, they replace ${currentDriver.name ?? 'the current driver'} on this bus.`
+                      : `+${d.phone ?? ''}`;
                 return (
                   <OptionCard
                     key={d.id}
@@ -140,10 +140,10 @@ export default function Assign() {
               <MoneyField label="Full price of the bus (K)" value={totalPrice} onChange={setTotalPrice} />
             ) : null}
 
-            <Text style={styles.section}>Who pays for fuel?</Text>
-            <Choice options={BEARERS} value={fuelBearer} onChange={setFuelBearer} />
-            <Text style={styles.section}>Who pays other costs?</Text>
-            <Choice options={BEARERS} value={otherCostsBearer} onChange={setOtherCostsBearer} />
+            <Text style={styles.section}>Fuel and other costs</Text>
+            <Text style={styles.costs}>
+              The driver pays from the takings. Costs you approve come off what the driver owes you.
+            </Text>
 
             {ready ? (
               <Card>
@@ -172,14 +172,15 @@ export default function Assign() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   flex: { flex: 1 },
   content: { padding: space(4), paddingBottom: space(8) },
   problem: { gap: space(3) },
   message: { fontSize: 15, lineHeight: 22, color: colors.text },
   section: { fontSize: 15, fontWeight: '700', color: colors.text, marginTop: space(2), marginBottom: space(2) },
+  costs: { fontSize: 14, lineHeight: 20, color: colors.muted, marginBottom: space(4) },
   summaryTitle: { fontSize: 15, fontWeight: '700', lineHeight: 21, color: colors.text },
   summary: { fontSize: 15, lineHeight: 22, color: colors.text, marginTop: space(2) },
   small: { fontSize: 13, lineHeight: 19, color: colors.muted, marginTop: space(3) },
   error: { fontSize: 14, lineHeight: 20, color: colors.owes, marginTop: space(3) },
-});
+}));

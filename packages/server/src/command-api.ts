@@ -11,6 +11,7 @@ import { maybeOne, type Database } from './db.ts';
 import * as crew from './handlers/crew.ts';
 import * as ledger from './handlers/ledger.ts';
 import * as payments from './handlers/payments.ts';
+import * as reports from './handlers/reports.ts';
 
 type Handler<T extends CommandType> = (ctx: CommandContext, payload: CommandPayload<T>) => Promise<Record<string, unknown>>;
 
@@ -31,10 +32,13 @@ const handlers: { [T in CommandType]: Handler<T> } = {
   record_handover: ledger.recordHandover,
   decide_handover: ledger.decideHandover,
   log_expense: ledger.logExpense,
+  decide_expense: ledger.decideExpense,
   correct_entry: ledger.correctEntry,
   claim_payment: payments.claimPayment,
   decide_payment: payments.decidePayment,
   reverse_payment: payments.reversePayment,
+  report_day: reports.reportDay,
+  decide_report: reports.decideReport,
 };
 
 /** Unique constraints that mean a rule was broken rather than a server fault. */
@@ -46,6 +50,7 @@ const CONSTRAINT_CODES: Record<string, string> = {
   expense_decisions_expense_id_key: 'expense.already_decided',
   payment_decisions_payment_id_key: 'payment.already_decided',
   payment_reversals_payment_id_key: 'payment.already_reversed',
+  day_report_decisions_report_id_key: 'report.already_decided',
   income_entries_one_reversal: 'correction.already_corrected',
   expenses_one_reversal: 'correction.already_corrected',
   memberships_one_active: 'invite.already_member',

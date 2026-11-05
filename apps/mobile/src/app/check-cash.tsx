@@ -8,7 +8,7 @@ import { kwacha } from '@/lib/arrangements';
 import { useAuth } from '@/lib/auth';
 import { fetchEntryToCheck, useScreenData } from '@/lib/business';
 import { reasonFor, sendCommand } from '@/lib/commands';
-import { colors, radius, space } from '@/lib/theme';
+import { colors, radius, space, themedStyles } from '@/lib/theme';
 
 export default function CheckCash() {
   const { entry: entryId } = useLocalSearchParams<{ entry: string }>();
@@ -123,7 +123,7 @@ export default function CheckCash() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   flex: { flex: 1 },
   content: { padding: space(4), paddingBottom: space(8), alignItems: 'stretch' },
   problem: { gap: space(3) },
@@ -145,4 +145,4 @@ const styles = StyleSheet.create({
     textAlignVertical: 'top',
   },
   error: { fontSize: 14, lineHeight: 20, color: colors.owes, marginTop: space(3), textAlign: 'center' },
-});
+}));

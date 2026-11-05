@@ -7,6 +7,10 @@ const day: DayView = {
   serviceDate: '2026-11-03',
   odometerStart: 1000,
   odometerEnd: null,
+  startedAt: null,
+  endedAt: null,
+  startSentAt: null,
+  endSentAt: null,
   unsent: false,
 };
 
@@ -31,6 +35,8 @@ const fuel = (over: Partial<DayCost> = {}): DayCost => ({
   amount: 20_000,
   litres: null,
   paidBy: 'driver_cash',
+  status: 'pending',
+  reason: null,
   note: '',
   at: '',
   unsent: true,
@@ -78,6 +84,12 @@ describe('estimateSettlement', () => {
     };
     expect(estimateSettlement(input({ arrangement })).expensesBorneByDriver).toBe(20_000);
     expect(estimateSettlement(input({ arrangement, costs: [fuel({ borneBy: 'owner' })] })).expensesBorneByOwner).toBe(20_000);
+  });
+
+  it('counts a cost still waiting for the owner, but not one the owner rejected', () => {
+    expect(estimateSettlement(input()).expensesBorneByOwner).toBe(20_000);
+    const rejected = estimateSettlement(input({ costs: [fuel({ status: 'declined', reason: 'Too high' })] }));
+    expect(rejected.expensesBorneByOwner).toBe(0);
   });
 
   it('adds money owed from earlier days', () => {

@@ -6,14 +6,14 @@ import { Choice, TextField } from '@/components/form';
 import { Text } from '@/components/text';
 import { BottomActions, Button } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
-import { BUS_TYPES, type BusType } from '@/lib/business';
+import { VEHICLE_TYPES, type VehicleType } from '@/lib/business';
 import { reasonFor, sendCommand } from '@/lib/commands';
-import { colors, space } from '@/lib/theme';
+import { colors, space, themedStyles } from '@/lib/theme';
 
 export default function AddBus() {
   const { account } = useAuth();
   const [plate, setPlate] = useState('');
-  const [type, setType] = useState<BusType>('minibus');
+  const [type, setType] = useState<VehicleType | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   // Kept across retries, so a reply lost to bad signal cannot add the bus twice.
@@ -21,7 +21,7 @@ export default function AddBus() {
 
   const save = async () => {
     const businessId = account?.business?.id;
-    if (!businessId) return;
+    if (!businessId || !type) return;
     setError(null);
     setSaving(true);
     try {
@@ -47,7 +47,7 @@ export default function AddBus() {
           autoCapitalize="characters"
         />
         <Text style={styles.label}>Type of bus</Text>
-        <Choice options={BUS_TYPES} value={type} onChange={setType} />
+        <Choice wrap options={VEHICLE_TYPES} value={type} onChange={setType} />
         {error ? (
           <Text style={styles.error} accessibilityRole="alert">
             {error}
@@ -56,15 +56,15 @@ export default function AddBus() {
       </ScrollView>
 
       <BottomActions>
-        <Button label={saving ? 'Saving...' : 'Add bus'} disabled={plate.trim() === '' || saving} onPress={save} />
+        <Button label={saving ? 'Saving...' : 'Add bus'} disabled={plate.trim() === '' || !type || saving} onPress={save} />
       </BottomActions>
     </KeyboardAvoidingView>
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   flex: { flex: 1 },
   content: { padding: space(4), paddingBottom: space(8) },
   label: { fontSize: 15, fontWeight: '600', color: colors.text, marginBottom: space(1.5) },
   error: { fontSize: 14, lineHeight: 20, color: colors.owes },
-});
+}));

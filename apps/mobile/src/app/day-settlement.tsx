@@ -5,20 +5,21 @@ import { useCallback, useRef, useState } from 'react';
 import { KeyboardAvoidingView, Platform, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { DayActivity } from '@/components/day-activity';
 import { MoneyField } from '@/components/form';
+import { daySentNote } from '@/components/home-parts';
 import { Text, TextInput } from '@/components/text';
-import { BottomActions, Button, Card, MoneyRow, Note, Pill, ScreenLoading, SectionTitle } from '@/components/ui';
-import { formatDay, kwacha } from '@/lib/arrangements';
+import { BottomActions, Button, Card, ListRow, MoneyRow, Note, Pill, ScreenLoading, SectionTitle } from '@/components/ui';
+import { formatDay, formatDaySpan, kwacha } from '@/lib/arrangements';
 import { useAuth } from '@/lib/auth';
 import { costCategoryLabel, fetchDaySettlement, useScreenData } from '@/lib/business';
 import { reasonFor, sendCommand } from '@/lib/commands';
-import { colors, radius, space } from '@/lib/theme';
+import { colors, radius, space, themedStyles, type } from '@/lib/theme';
 
 const STATE_PILL: Record<SettlementState, { label: string; tone: 'ok' | 'waiting' | 'neutral' }> = {
   nothing_owed: { label: 'Nothing owed', tone: 'ok' },
-  settled: { label: 'Settled', tone: 'ok' },
+  settled: { label: 'Paid', tone: 'ok' },
   part_paid: { label: 'Part paid', tone: 'waiting' },
-  claimed: { label: 'Payment to confirm', tone: 'waiting' },
-  unpaid: { label: 'Not paid yet', tone: 'waiting' },
+  claimed: { label: 'To confirm', tone: 'waiting' },
+  unpaid: { label: 'Not paid', tone: 'waiting' },
 };
 
 const PAYMENT_STATUS: Record<SettlementPayment['status'], string> = {
@@ -29,9 +30,9 @@ const PAYMENT_STATUS: Record<SettlementPayment['status'], string> = {
 };
 
 function verdict(remaining: number, isOwner: boolean): string {
-  if (remaining > 0) return isOwner ? 'Your driver still owes you' : 'You still owe the owner';
-  if (remaining < 0) return isOwner ? 'You still owe your driver' : 'The owner still owes you';
-  return 'Nothing left to pay';
+  if (remaining > 0) return isOwner ? 'Your driver owes you' : 'You owe the owner';
+  if (remaining < 0) return isOwner ? 'You owe your driver' : 'The owner owes you';
+  return 'Nothing to pay';
 }
 
 export default function DaySettlement() {
@@ -47,6 +48,7 @@ export default function DaySettlement() {
   const [reason, setReason] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [showEntries, setShowEntries] = useState(false);
   // Reused only for the same answer, so a retry after lost signal repeats it and a change of mind is a new command.
   const attempt = useRef({ key: '', clientId: randomUUID() });
 
@@ -92,14 +94,14 @@ export default function DaySettlement() {
     setSaving(false);
   };
 
-  const title = <Stack.Screen options={{ title: 'Settlement' }} />;
+  const title = <Stack.Screen options={{ title: 'Cashing' }} />;
   if (!data) {
     return (
       <View style={styles.centre}>
         {title}
         {failed ? (
           <>
-            <Text style={styles.message}>Could not load the settlement. Check your signal and try again. If your signal is fine, the problem is on our side.</Text>
+            <Text style={styles.message}>Could not load the cashing. Check your signal and try again. If your signal is fine, the problem is on our side.</Text>
             <Button variant="secondary" label="Try again" onPress={reload} />
           </>
         ) : (
@@ -122,8 +124,17 @@ export default function DaySettlement() {
   const canPay = closed && !older && iOwe && !claimed;
   const olderPill =
     remaining !== 0
-      ? ({ label: 'Not fully paid', tone: 'waiting' } as const)
-      : ({ label: statement.owedForDay === 0 ? 'Nothing owed' : 'Paid up', tone: 'ok' } as const);
+      ? ({ label: 'Part paid', tone: 'waiting' } as const)
+      : ({ label: statement.owedForDay === 0 ? 'Nothing owed' : 'Paid', tone: 'ok' } as const);
+  const totalCosts = statement.expensesBorneByOwner + statement.expensesBorneByDriver;
+  // What was due and what has come in, including money from earlier days, so the two always differ by what is left.
+  const due = older ? statement.ownerShare : statement.ownerShare + statement.arrearsBroughtForward;
+  const received = due - remaining;
+  const progress = due > 0 ? Math.min(Math.max(received / due, 0), 1) : remaining === 0 ? 1 : 0;
+  const paymentLabel = (p: SettlementPayment) => {
+    if (p.payer === 'driver') return isOwner ? 'Your driver paid you' : 'You paid the owner';
+    return isOwner ? 'You paid your driver' : 'The owner paid you';
+  };
   const partAmount = (() => {
     try {
       return parseKwacha(partText);
@@ -145,13 +156,34 @@ export default function DaySettlement() {
             type: 'income',
             amount: e.amount,
             label: entryLabel(e.kind),
-            note: e.status === 'disputed' ? 'Disputed. Correct it to settle the day.' : null,
+            disputed: e.status === 'disputed',
           })),
         ...costs
-          .filter((c) => c.amount > 0 && !reversed.has(c.id))
-          .map((c) => ({ id: c.id, type: 'expense', amount: c.amount, label: costCategoryLabel(c.category), note: null })),
+          .filter((c) => c.amount > 0 && c.status !== 'pending' && !reversed.has(c.id))
+          .map((c) => ({ id: c.id, type: 'expense', amount: c.amount, label: costCategoryLabel(c.category), disputed: false })),
       ]
     : [];
+  // A dispute stops the day being final, so it stays in view. Everything else waits until someone asks.
+  const toFix = correctable.filter((item) => item.disputed);
+  const correctRows = (items: typeof correctable) =>
+    items.map((item, i) => (
+      <View key={item.id} style={[styles.correctRow, i > 0 && styles.divider]}>
+        <Text style={[styles.flex, styles.correctLabel]}>
+          {item.label}: {kwacha(item.amount)}
+        </Text>
+        <Button
+          compact
+          variant="secondary"
+          label="Correct"
+          onPress={() =>
+            router.push({
+              pathname: '/correct-entry',
+              params: { id: item.id, type: item.type, amount: String(item.amount), label: item.label },
+            })
+          }
+        />
+      </View>
+    ));
 
   return (
     <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -161,80 +193,87 @@ export default function DaySettlement() {
         keyboardShouldPersistTaps="handled"
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={reload} />}
       >
-        <View style={styles.heading}>
-          <Text style={styles.detail}>
-            {params.plate} · {formatDay(tripDay.serviceDate)}
-          </Text>
-          {statement.provisional ? (
-            <Pill label="Not final yet" tone="waiting" />
-          ) : (
-            <Pill {...(older ? olderPill : STATE_PILL[position.state])} />
-          )}
-        </View>
+        <View style={styles.hero}>
+          <View style={styles.heroTop}>
+            <View style={styles.flex}>
+              <Text style={styles.heroPlate}>{params.plate}</Text>
+              <Text style={styles.heroDate}>
+                {[formatDay(tripDay.serviceDate), formatDaySpan(data.times.startedAt, data.times.endedAt)].filter(Boolean).join(' · ')}
+              </Text>
+            </View>
+            {statement.provisional ? (
+              <Pill label="Not final yet" tone="waiting" />
+            ) : (
+              <Pill {...(older ? olderPill : STATE_PILL[position.state])} />
+            )}
+          </View>
 
-        <Card style={styles.headline}>
           <Text style={styles.verdict}>{verdict(remaining, isOwner)}</Text>
           <Text style={styles.amount} adjustsFontSizeToFit numberOfLines={1}>
             {kwacha(Math.abs(remaining))}
           </Text>
-        </Card>
 
-        {!closed ? <Note>The day is still running, so these figures will change.</Note> : null}
+          <View style={styles.track} accessibilityLabel={`${Math.round(progress * 100)}% of the cashing received`}>
+            <View style={[styles.fill, { width: `${progress * 100}%` }]} />
+          </View>
+          <View style={styles.heroStats}>
+            <HeroStat label="Cashing due" value={kwacha(due)} />
+            <HeroStat label="Received" value={kwacha(received)} />
+          </View>
+        </View>
+
+        {isOwner && daySentNote(data.times) ? <Note>{daySentNote(data.times)}</Note> : null}
+        {statement.excused ? <Note>Report accepted: nothing more is owed for this day.</Note> : null}
+        {!closed ? <Note>The day is still running, so this will change.</Note> : null}
         {older ? (
           <Note>
-            This is what is left from this day, counting later payments against the oldest money owed first.{' '}
+            Later payments are counted here.{' '}
             {allocation.balance === 0
-              ? 'Across all days, nothing is owed now.'
-              : allocation.balance > 0
-                ? `Across all days, ${isOwner ? 'your driver owes you' : 'you owe the owner'} ${kwacha(allocation.balance)} now.`
-                : `Across all days, ${isOwner ? 'you owe your driver' : 'the owner owes you'} ${kwacha(-allocation.balance)} now.`}
+              ? 'In total, nothing is owed now.'
+              : `In total now: ${verdict(allocation.balance, isOwner).toLowerCase()} ${kwacha(Math.abs(allocation.balance))}.`}
           </Note>
         ) : null}
         {statement.unconfirmedIncomeIds.length > 0 ? (
           <Note>
             {statement.unconfirmedIncomeIds.length === 1
-              ? '1 entry has not been agreed yet, and it is not counted below.'
-              : `${statement.unconfirmedIncomeIds.length} entries have not been agreed yet, and they are not counted below.`}
+              ? '1 entry is not agreed yet, so it is not counted.'
+              : `${statement.unconfirmedIncomeIds.length} entries are not agreed yet, so they are not counted.`}
+          </Note>
+        ) : null}
+        {statement.pendingExpenseIds.length > 0 ? (
+          <Note>
+            {statement.pendingExpenseIds.length === 1
+              ? '1 cost is not approved yet, so it is not counted.'
+              : `${statement.pendingExpenseIds.length} costs are not approved yet, so they are not counted.`}
           </Note>
         ) : null}
 
-        <SectionTitle>How it was worked out</SectionTitle>
+        {toFix.length > 0 ? (
+          <>
+            <SectionTitle>Disputed: correct to finish the day</SectionTitle>
+            <Card style={styles.rows}>{correctRows(toFix)}</Card>
+          </>
+        ) : null}
+
+        <SectionTitle>How it adds up</SectionTitle>
         <Card style={styles.rows}>
-          <MoneyRow label="Confirmed takings" value={kwacha(statement.grossIncome)} />
-          <MoneyRow label="Costs the owner bears" value={kwacha(statement.expensesBorneByOwner)} />
-          <MoneyRow label="Costs the driver bears" value={kwacha(statement.expensesBorneByDriver)} />
+          <MoneyRow label="Takings" value={kwacha(statement.grossIncome)} />
+          {totalCosts !== 0 ? <MoneyRow label="Costs" value={`- ${kwacha(totalCosts)}`} /> : null}
           <MoneyRow
-            label="The owner's part of the day"
-            note={statement.targetApplies ? undefined : 'The bus was off the road, so no fixed amount applied.'}
+            label="Cashing due"
+            note={statement.targetApplies ? undefined : 'Bus off the road: no fixed amount today.'}
             value={kwacha(statement.ownerShare)}
-            strong
           />
-          <MoneyRow label="The driver's part of the day" value={kwacha(statement.driverShare)} strong />
-          <MoneyRow label="The owner already has" value={kwacha(statement.ownerNetCash)} />
-          <MoneyRow label="Left owing from this day" value={kwacha(statement.owedForDay)} />
-          {older ? (
+          <MoneyRow label={isOwner ? 'Driver keeps' : 'You keep'} value={kwacha(statement.driverShare)} />
+          <MoneyRow label={isOwner ? 'You received' : 'Owner received'} value={kwacha(statement.ownerNetCash)} />
+          {!older && statement.arrearsBroughtForward !== 0 ? (
             <MoneyRow
-              label="Still unpaid from this day"
-              note="Above zero: the driver owes. Below zero: the owner owes."
-              value={kwacha(remaining)}
-              strong
-              last
+              label={statement.arrearsBroughtForward > 0 ? 'Owed by the driver from before' : 'Owed by the owner from before'}
+              value={kwacha(Math.abs(statement.arrearsBroughtForward))}
             />
-          ) : (
-            <>
-              {statement.arrearsBroughtForward !== 0 ? (
-                <MoneyRow label="From earlier days" value={kwacha(statement.arrearsBroughtForward)} />
-              ) : null}
-              {position.paid !== 0 ? <MoneyRow label="Payments confirmed" value={kwacha(position.paid)} /> : null}
-              <MoneyRow
-                label="Still to pay"
-                note="Above zero: the driver owes. Below zero: the owner owes."
-                value={kwacha(remaining)}
-                strong
-                last
-              />
-            </>
-          )}
+          ) : null}
+          {!older && position.paid !== 0 ? <MoneyRow label="Paid since" value={kwacha(Math.abs(position.paid))} /> : null}
+          <MoneyRow label={verdict(remaining, isOwner)} value={kwacha(Math.abs(remaining))} strong last />
         </Card>
 
         {payments.length > 0 ? (
@@ -244,7 +283,7 @@ export default function DaySettlement() {
               {payments.map((p, i) => (
                 <View key={p.id}>
                   <MoneyRow
-                    label={p.payer === 'driver' ? 'Driver paid the owner' : 'Owner paid the driver'}
+                    label={paymentLabel(p)}
                     note={data.paymentReasons[p.id] ? `${PAYMENT_STATUS[p.status]}: ${data.paymentReasons[p.id]}` : PAYMENT_STATUS[p.status]}
                     value={kwacha(p.confirmedAmount ?? p.amount)}
                     last={i === payments.length - 1 && !(p.status === 'confirmed' && iWasPaidBy(p.payer))}
@@ -254,7 +293,7 @@ export default function DaySettlement() {
                       <Button
                         compact
                         variant="secondary"
-                        label="Undo this confirmation"
+                        label="Undo"
                         onPress={() => {
                           setReason('');
                           setError(null);
@@ -269,11 +308,11 @@ export default function DaySettlement() {
           </>
         ) : null}
 
-        {remaining !== 0 && closed ? <Note>Anything not paid carries forward to the next day as money still owed.</Note> : null}
+        {remaining !== 0 && closed && !older ? <Note>Anything not paid moves to the next day.</Note> : null}
 
         {undoing ? (
           <View style={styles.answer}>
-            <Text style={styles.label}>Why are you undoing this?</Text>
+            <Text style={styles.label}>Why?</Text>
             <TextInput
               style={styles.input}
               value={reason}
@@ -286,19 +325,18 @@ export default function DaySettlement() {
               accessibilityLabel="Why are you undoing this"
             />
             <Text style={styles.small}>
-              {kwacha(undoing.confirmedAmount ?? undoing.amount)} will count as owed again. The other person can see this and
-              your reason, and the record stays in the history.
+              {kwacha(undoing.confirmedAmount ?? undoing.amount)} will be owed again. The other person will see your reason.
             </Text>
           </View>
         ) : null}
         {answering === 'part' ? (
           <View style={styles.answer}>
-            <MoneyField label="How much did you receive? (K)" value={partText} onChange={setPartText} />
+            <MoneyField label="How much did you get? (K)" value={partText} onChange={setPartText} />
           </View>
         ) : null}
         {answering === 'reject' ? (
           <View style={styles.answer}>
-            <Text style={styles.label}>Tell them why (optional)</Text>
+            <Text style={styles.label}>Why? (optional)</Text>
             <TextInput
               style={styles.input}
               value={reason}
@@ -317,39 +355,26 @@ export default function DaySettlement() {
           </Text>
         ) : null}
 
-        {correctable.length > 0 ? (
-          <>
-            <SectionTitle>Fix a mistake</SectionTitle>
-            <Card style={styles.rows}>
-              {correctable.map((item, i) => (
-                <View key={item.id} style={[styles.correctRow, i > 0 && styles.divider]}>
-                  <View style={styles.flex}>
-                    <Text style={styles.correctLabel}>
-                      {item.label}: {kwacha(item.amount)}
-                    </Text>
-                    {item.note ? <Text style={styles.correctNote}>{item.note}</Text> : null}
-                  </View>
-                  <Button
-                    compact
-                    variant="secondary"
-                    label="Correct"
-                    onPress={() =>
-                      router.push({
-                        pathname: '/correct-entry',
-                        params: { id: item.id, type: item.type, amount: String(item.amount), label: item.label },
-                      })
-                    }
-                  />
-                </View>
-              ))}
-            </Card>
-          </>
-        ) : null}
-
         {entries.length + costs.length > 0 ? (
+          <Card style={styles.toggle}>
+            <ListRow
+              first
+              title={showEntries ? 'Hide entries' : 'See all entries'}
+              onPress={() => setShowEntries(!showEntries)}
+            />
+          </Card>
+        ) : null}
+        {showEntries ? (
           <>
-            <SectionTitle>Everything recorded</SectionTitle>
-            <DayActivity viewer={isOwner ? 'owner' : 'driver'} entries={entries} costs={costs} />
+            <Card style={styles.rows}>
+              <DayActivity viewer={isOwner ? 'owner' : 'driver'} entries={entries} costs={costs} />
+            </Card>
+            {correctable.length > toFix.length ? (
+              <>
+                <SectionTitle>Fix a mistake</SectionTitle>
+                <Card style={styles.rows}>{correctRows(correctable.filter((item) => !item.disputed))}</Card>
+              </>
+            ) : null}
           </>
         ) : null}
       </ScrollView>
@@ -357,7 +382,7 @@ export default function DaySettlement() {
       {undoing ? (
         <BottomActions>
           <Button
-            label={saving ? 'Undoing...' : 'Undo this confirmation'}
+            label={saving ? 'Undoing...' : 'Undo payment'}
             disabled={reason.trim() === '' || saving}
             onPress={() => undo(undoing)}
           />
@@ -368,7 +393,7 @@ export default function DaySettlement() {
           {answering === 'part' ? (
             <>
               <Button
-                label={saving ? 'Sending...' : partValid ? `I received ${kwacha(partAmount)}` : `Enter up to ${kwacha(claimed.amount)}`}
+                label={saving ? 'Sending...' : partValid ? `I got ${kwacha(partAmount)}` : `Enter up to ${kwacha(claimed.amount)}`}
                 disabled={!partValid || saving}
                 onPress={() => decide(claimed, true, partAmount)}
               />
@@ -376,18 +401,18 @@ export default function DaySettlement() {
             </>
           ) : answering === 'reject' ? (
             <>
-              <Button label={saving ? 'Sending...' : 'I did not receive this'} disabled={saving} onPress={() => decide(claimed, false, null)} />
+              <Button label={saving ? 'Sending...' : 'I did not get it'} disabled={saving} onPress={() => decide(claimed, false, null)} />
               <Button variant="secondary" label="Go back" disabled={saving} onPress={() => setAnswering(null)} />
             </>
           ) : (
             <>
               <Button
-                label={saving ? 'Sending...' : `Yes, I received ${kwacha(claimed.amount)}`}
+                label={saving ? 'Sending...' : `Yes, I got ${kwacha(claimed.amount)}`}
                 disabled={saving}
                 onPress={() => decide(claimed, true, claimed.amount)}
               />
-              <Button variant="secondary" label="I received a different amount" disabled={saving} onPress={() => setAnswering('part')} />
-              <Button variant="secondary" label="I did not receive this" disabled={saving} onPress={() => setAnswering('reject')} />
+              <Button variant="secondary" label="I got a different amount" disabled={saving} onPress={() => setAnswering('part')} />
+              <Button variant="secondary" label="I did not get it" disabled={saving} onPress={() => setAnswering('reject')} />
             </>
           )}
         </BottomActions>
@@ -396,7 +421,7 @@ export default function DaySettlement() {
       {canPay && !undoing ? (
         <BottomActions>
           <Button
-            label="Record a payment"
+            label="I paid"
             onPress={() =>
               router.push({
                 pathname: '/pay',
@@ -410,17 +435,35 @@ export default function DaySettlement() {
   );
 }
 
-const styles = StyleSheet.create({
+function HeroStat({ label, value }: { label: string; value: string }) {
+  return (
+    <View style={styles.flex}>
+      <Text style={styles.heroStatLabel}>{label}</Text>
+      <Text style={styles.heroStatValue} adjustsFontSizeToFit numberOfLines={1}>
+        {value}
+      </Text>
+    </View>
+  );
+}
+
+const styles = themedStyles(() => StyleSheet.create({
   flex: { flex: 1 },
   centre: { flex: 1, justifyContent: 'center', gap: space(3), padding: space(6) },
   message: { fontSize: 15, lineHeight: 22, color: colors.text, textAlign: 'center' },
   content: { padding: space(4), paddingBottom: space(8) },
-  heading: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: space(2), marginBottom: space(3) },
-  detail: { flexShrink: 1, fontSize: 14, color: colors.muted },
-  headline: { alignItems: 'center', paddingVertical: space(5) },
-  verdict: { fontSize: 16, fontWeight: '600', color: colors.muted, textAlign: 'center' },
-  amount: { fontSize: 44, fontWeight: '800', color: colors.text, marginTop: space(1), fontVariant: ['tabular-nums'] },
+  hero: { backgroundColor: colors.hero, borderRadius: radius.card, padding: space(5) },
+  heroTop: { flexDirection: 'row', alignItems: 'flex-start', gap: space(3) },
+  heroPlate: { ...type.heading, color: colors.onDark },
+  heroDate: { ...type.small, color: colors.onDarkMuted, marginTop: 2 },
+  verdict: { ...type.small, color: colors.onDarkMuted, marginTop: space(5) },
+  amount: { ...type.display, color: colors.onDark, marginTop: space(1), fontVariant: ['tabular-nums'] },
+  track: { height: 6, borderRadius: 3, backgroundColor: colors.onDarkMuted, overflow: 'hidden', marginTop: space(4) },
+  fill: { height: '100%', borderRadius: 3, backgroundColor: colors.primary },
+  heroStats: { flexDirection: 'row', gap: space(3), marginTop: space(3) },
+  heroStatLabel: { ...type.small, color: colors.onDarkMuted },
+  heroStatValue: { ...type.heading, color: colors.onDark, marginTop: 2, fontVariant: ['tabular-nums'] },
   rows: { paddingVertical: space(1) },
+  toggle: { padding: 0, overflow: 'hidden', marginTop: space(5), marginBottom: space(3) },
   answer: { marginTop: space(5) },
   undo: { alignItems: 'flex-start', paddingBottom: space(3) },
   small: { fontSize: 13, lineHeight: 19, color: colors.muted, marginTop: space(2) },
@@ -440,5 +483,4 @@ const styles = StyleSheet.create({
   correctRow: { flexDirection: 'row', alignItems: 'center', gap: space(3), paddingVertical: space(3) },
   divider: { borderTopWidth: 1, borderTopColor: colors.border },
   correctLabel: { fontSize: 15, fontWeight: '600', color: colors.text },
-  correctNote: { fontSize: 13, lineHeight: 18, color: colors.owes, marginTop: 2 },
-});
+}));

@@ -1,10 +1,10 @@
 import {
-  AcceptAllPolicy,
   assertCanDecide,
   buildExpense,
   correctExpense,
   correctIncome,
   invariant,
+  OwnerApprovesPolicy,
   TripDay,
   VehicleStatusPolicy,
   type ApprovalPolicy,
@@ -27,11 +27,8 @@ import {
 } from '../repositories.ts';
 import { refreshSettlement } from '../settlement-service.ts';
 
-/**
- * Version 0 accepts every expense; Version 1 swaps in FloatApprovalPolicy here
- * and nothing else changes (design 8.2).
- */
-export const approvalPolicy: ApprovalPolicy = new AcceptAllPolicy();
+/** The Owner approves or rejects what a Driver spends. Swapping the policy here changes nothing else (design 8.2). */
+export const approvalPolicy: ApprovalPolicy = new OwnerApprovesPolicy();
 
 /** UC11 steps 1-4 */
 export async function startDay(ctx: CommandContext, p: CommandPayload<'start_day'>) {
@@ -208,6 +205,28 @@ export async function logExpense(ctx: CommandContext, p: CommandPayload<'log_exp
     });
   }
   return { expenseId: expense.id, status: expense.state.status, borneBy: expense.borneBy };
+}
+
+/** The Owner's answer to a cost. A decision is a new row, and only a waiting cost can be decided (ExpenseState). */
+export async function decideExpense(ctx: CommandContext, p: CommandPayload<'decide_expense'>) {
+  const { businessId } = requireOwner(ctx);
+  const expense = toExpense(await one(ctx.db, 'select * from expenses_v where id = $1', [p.expenseId], 'expense.not_found'));
+  const reason = p.reason?.trim() ?? '';
+  const state = p.accept ? expense.state.approve(expense.amount, expense.amount) : expense.state.decline(reason);
+  await ctx.db.query(
+    `insert into expense_decisions (business_id, expense_id, decision, approved_amount_ngwee, reason, decided_by, decided_at)
+     values ($1, $2, $3, $4, $5, $6, $7)`,
+    [businessId, expense.id, state.status, state.approvedAmount, p.accept ? null : reason, ctx.userId, ctx.now],
+  );
+  if (expense.tripDayId !== null) await refreshSettlement(ctx.db, expense.tripDayId);
+  emit(ctx, {
+    type: p.accept ? 'ExpenseApproved' : 'ExpenseRejected',
+    businessId,
+    subjectUserId: expense.recordedBy,
+    entityId: expense.id,
+    link: expense.tripDayId ? `/days/${expense.tripDayId}` : '/expenses',
+  });
+  return { expenseId: expense.id, status: state.status };
 }
 
 /** UC10: reversing and replacement entries, an audit entry, and a recalculation. */

@@ -8,7 +8,7 @@ import { BottomActions, Button } from '@/components/ui';
 import { kwacha } from '@/lib/arrangements';
 import { useAuth } from '@/lib/auth';
 import { reasonFor, sendCommand } from '@/lib/commands';
-import { colors, radius, space } from '@/lib/theme';
+import { colors, radius, space, themedStyles } from '@/lib/theme';
 
 function typedFrom(amount: number): string {
   return (amount / 100).toFixed(amount % 100 === 0 ? 0 : 2);
@@ -54,7 +54,7 @@ export default function Pay() {
           K{typed || '0'}
         </Text>
         <Text style={styles.helper}>
-          Cash you paid {params.to}. It only counts once they confirm it. {kwacha(owed)} is owed.
+          Cash you gave {params.to}. It counts once they confirm it.
         </Text>
         {tooMuch || error ? (
           <Text style={styles.error} accessibilityRole="alert">
@@ -81,7 +81,7 @@ export default function Pay() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   flex: { flex: 1 },
   body: { flex: 1, padding: space(4) },
   amount: { fontSize: 52, fontWeight: '800', color: colors.text, textAlign: 'center', marginTop: space(2), fontVariant: ['tabular-nums'] },
@@ -97,4 +97,4 @@ const styles = StyleSheet.create({
   },
   allText: { fontSize: 14, fontWeight: '700', color: colors.text },
   pressed: { opacity: 0.6 },
-});
+}));

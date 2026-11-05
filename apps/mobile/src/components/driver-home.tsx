@@ -13,9 +13,9 @@ import { router, Stack } from 'expo-router';
 import { RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { DayActivity } from '@/components/day-activity';
-import { DayStatusPill, dayDetail, HomeHeader, MoreSection, type Business } from '@/components/home-parts';
+import { callPhone, DayStatusPill, dayDetail, HomeHeader, initialsOf, QuickLinks, type Business } from '@/components/home-parts';
 import { Text } from '@/components/text';
-import { Button, Card, EmptyState, ListRow, LoadError, Note, ScreenLoading, Section } from '@/components/ui';
+import { Avatar, Button, Card, EmptyState, ListRow, LoadError, Note, ScreenLoading, Section } from '@/components/ui';
 import {
   describeCosts,
   describeTerms,
@@ -28,14 +28,19 @@ import {
 import { useDriverOverview } from '@/lib/business';
 import { reasonForCode } from '@/lib/commands';
 import { useCommandQueue } from '@/lib/queue';
-import { colors, radius, space, type } from '@/lib/theme';
+import { colors, radius, space, themedStyles, type } from '@/lib/theme';
 
 const REFUSED_TITLE: Record<string, string> = {
   start_day: 'Your day could not be started',
   end_day: 'Your day could not be ended',
   record_handover: 'Your cash entry was not accepted',
   log_expense: 'Your cost was not accepted',
+  report_day: 'Your report was not accepted',
 };
+
+function openReport(vehicleId: string, plate: string) {
+  router.push({ pathname: '/report-day', params: { bus: vehicleId, plate } });
+}
 
 /** Where the driver stands if everything so far is confirmed. It works with no signal, so it is always an estimate. */
 function estimateLine(arrangement: ArrangementRecord, day: DayView, entries: DayEntry[], costs: DayCost[], arrears: number): string | null {
@@ -78,6 +83,7 @@ function RunningDay(props: {
         <Text style={styles.heroNote}>
           {kwacha(summary.takings)} collected − {kwacha(summary.costsFromCash)} spent − {kwacha(summary.handedOver)} to owner
         </Text>
+        <Text style={styles.heroNote}>{dayDetail(day)}</Text>
         {props.estimate ? <Text style={styles.heroEstimate}>{props.estimate}</Text> : null}
       </View>
 
@@ -109,7 +115,8 @@ function RunningDay(props: {
       </Section>
 
       <View style={styles.endDay}>
-        {day.unsent ? null : <Button variant="secondary" label="See settlement so far" onPress={() => openSettlement(day, plate)} />}
+        {day.unsent ? null : <Button variant="secondary" label="See cashing so far" onPress={() => openSettlement(day, plate)} />}
+        <Button variant="secondary" label="Report a problem" onPress={() => openReport(vehicleId, plate)} />
         <Button
           variant="secondary"
           label="End day"
@@ -148,16 +155,22 @@ function IdleBus(props: {
           </View>
         ) : null}
       </Card>
-      {settlementDay && !settlementDay.unsent ? (
-        <Card style={styles.list}>
+      <Card style={styles.list}>
+        {settlementDay && !settlementDay.unsent ? (
           <ListRow
             first
-            title={day ? 'See settlement' : 'Last settlement'}
+            title={day ? 'See cashing' : 'Last cashing'}
             detail={formatDay(settlementDay.serviceDate)}
             onPress={() => openSettlement(settlementDay, plate)}
           />
-        </Card>
-      ) : null}
+        ) : null}
+        <ListRow
+          first={!settlementDay || settlementDay.unsent}
+          title="Report a problem"
+          detail="Sick, a breakdown or the bus off the road"
+          onPress={() => openReport(props.vehicleId, plate)}
+        />
+      </Card>
       {day ? (
         <Section title="Today">
           <Card style={styles.activityCard}>
@@ -297,17 +310,36 @@ export function DriverHome({ business, userId }: { business: Business; userId: s
         </View>
       ) : null}
 
-      <MoreSection />
+      <QuickLinks />
+
+      {overview?.owner ? (
+        <Section title="Your owner">
+          <Card style={styles.owner}>
+            <ListRow
+              first
+              leading={<Avatar initials={initialsOf(overview.owner.name ?? business.name)} />}
+              title={overview.owner.name ?? 'Your owner'}
+              detail={[business.name, overview.owner.phone ? `+${overview.owner.phone}` : null].filter(Boolean).join(' · ')}
+              right={
+                overview.owner.phone ? (
+                  <Button compact variant="secondary" label="Call" onPress={() => callPhone(overview.owner?.phone as string)} />
+                ) : undefined
+              }
+            />
+          </Card>
+        </Section>
+      ) : null}
     </ScrollView>
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   flex: { flex: 1 },
   content: { flexGrow: 1, paddingHorizontal: space(4) },
   list: { padding: 0, overflow: 'hidden', marginTop: space(3) },
+  owner: { padding: 0, overflow: 'hidden' },
   bus: { marginTop: space(5) },
-  hero: { backgroundColor: colors.dark, borderRadius: radius.card, padding: space(5) },
+  hero: { backgroundColor: colors.hero, borderRadius: radius.card, padding: space(5) },
   heroTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: space(2) },
   heroLabel: { ...type.small, color: colors.onDarkMuted },
   heroAmount: { ...type.display, color: colors.onDark, marginTop: space(1), fontVariant: ['tabular-nums'] },
@@ -326,4 +358,4 @@ const styles = StyleSheet.create({
   refused: { gap: space(2), marginTop: space(4), alignItems: 'flex-start' },
   refusedTitle: { ...type.heading, color: colors.owes },
   refusedText: { ...type.body, color: colors.text },
-});
+}));

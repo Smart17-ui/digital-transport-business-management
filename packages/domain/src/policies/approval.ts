@@ -26,6 +26,17 @@ export class AcceptAllPolicy implements ApprovalPolicy {
 }
 
 /**
+ * What pilot owners asked for: a driver may spend from the day's cash without
+ * asking first, but the cost waits for the Owner, who can reject it. Owner-paid
+ * costs never wait.
+ */
+export class OwnerApprovesPolicy implements ApprovalPolicy {
+  decide(expense: ApprovalCandidate): ApprovalDecision {
+    return expense.paidBy === 'owner' ? 'approved' : 'pending';
+  }
+}
+
+/**
  * Version 1: fuel paid from the Driver's cash or an advance is approved
  * automatically within the float, per purchase; above it the Owner decides
  * (UC15). Owner-paid costs never wait.

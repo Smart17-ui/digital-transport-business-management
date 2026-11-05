@@ -8,7 +8,7 @@ import { offerSummary, termsAreReadable } from '@/lib/arrangements';
 import { useAuth } from '@/lib/auth';
 import { fetchOffer, useScreenData } from '@/lib/business';
 import { reasonFor, sendCommand } from '@/lib/commands';
-import { colors, radius, space } from '@/lib/theme';
+import { colors, radius, space, themedStyles } from '@/lib/theme';
 
 export default function Offer() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -125,7 +125,7 @@ export default function Offer() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   flex: { flex: 1 },
   content: { padding: space(4), paddingBottom: space(8) },
   problem: { gap: space(3) },
@@ -150,4 +150,4 @@ const styles = StyleSheet.create({
     textAlignVertical: 'top',
   },
   error: { fontSize: 14, lineHeight: 20, color: colors.owes, marginTop: space(3) },
-});
+}));

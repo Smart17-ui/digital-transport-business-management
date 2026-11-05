@@ -125,11 +125,33 @@ export async function respondArrangement(ctx: CommandContext, p: CommandPayload<
   invariant(row.status === 'proposed', 'arrangement.already_decided');
 
   if (p.accept) {
-    // UC6 1a: the old arrangement ends and stays in history.
-    await ctx.db.query(
+    // A bus has one driver, so taking it needs any other driver's day on it to have ended first.
+    const running = await maybeOne(
+      ctx.db,
+      'select 1 from trip_days where vehicle_id = $1 and driver_id <> $2 and ended_at is null',
+      [row.vehicle_id, row.driver_id],
+    );
+    invariant(running === null, 'arrangement.bus_in_use');
+    // UC6 1a: whoever had the bus, the old arrangement ends and stays in history.
+    const { rows: ended } = await ctx.db.query(
       `update arrangements set status = 'ended', ended_on = $1
-       where vehicle_id = $2 and driver_id = $3 and status = 'active'`,
-      [row.effective_from, row.vehicle_id, row.driver_id],
+       where vehicle_id = $2 and status = 'active' returning driver_id`,
+      [row.effective_from, row.vehicle_id],
+    );
+    for (const driverId of new Set(ended.map((r) => str(r.driver_id)))) {
+      if (driverId === str(row.driver_id)) continue;
+      emit(ctx, {
+        type: 'ArrangementEnded',
+        businessId,
+        subjectUserId: driverId,
+        entityId: p.arrangementId,
+        link: '/',
+      });
+    }
+    await ctx.db.query(
+      `update arrangements set status = 'declined', decided_at = $1, decline_reason = 'Another offer on this bus was accepted.'
+       where vehicle_id = $2 and status = 'proposed' and id <> $3`,
+      [ctx.now, row.vehicle_id, p.arrangementId],
     );
     await ctx.db.query(`update arrangements set status = 'active', decided_at = $1 where id = $2`, [
       ctx.now,

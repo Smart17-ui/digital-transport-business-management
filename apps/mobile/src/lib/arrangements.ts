@@ -16,7 +16,7 @@ export interface ArrangementRecord {
 export const ARRANGEMENT_OPTIONS: readonly { value: ArrangementType; title: string; detail: string }[] = [
   {
     value: 'fixed_target',
-    title: 'Daily target',
+    title: 'Cashing (daily target)',
     detail: 'The driver pays you a fixed amount each working day and keeps the rest.',
   },
   { value: 'revenue_share', title: 'Share of takings', detail: 'You and the driver split the takings by percentage.' },
@@ -29,7 +29,7 @@ export const ARRANGEMENT_OPTIONS: readonly { value: ArrangementType; title: stri
 ];
 
 export const AMOUNT_LABEL: Record<ArrangementType, string> = {
-  fixed_target: 'Daily target (K)',
+  fixed_target: 'Daily cashing (K)',
   revenue_share: "Owner's share (%)",
   salary: 'Daily pay (K)',
   rent_to_own: 'Daily payment (K)',
@@ -81,8 +81,8 @@ export function describeTerms(type: ArrangementType, terms: Record<string, numbe
     case 'fixed_target': {
       const amount = kwacha(terms.dailyTarget!);
       return owner
-        ? `The driver pays you ${amount} each working day and keeps the rest.`
-        : `You pay the owner ${amount} each working day and keep the rest.`;
+        ? `Cashing: the driver pays you ${amount} each working day and keeps the rest.`
+        : `Cashing: you pay the owner ${amount} each working day and keep the rest.`;
     }
     case 'revenue_share': {
       const ownerPercent = terms.ownerShareBasisPoints! / 100;
@@ -108,10 +108,16 @@ export function describeTerms(type: ArrangementType, terms: Record<string, numbe
 }
 
 export function describeCosts(fuelBearer: Bearer, otherCostsBearer: Bearer, viewer: Bearer): string {
-  const pays = (bearer: Bearer) => (bearer === viewer ? 'You pay' : `The ${bearer} pays`);
+  // A cost the owner bears is still paid by the driver at the time, from the takings.
+  const line = (bearer: Bearer, what: string) => {
+    if (bearer === 'driver') return viewer === 'driver' ? `You pay for ${what} yourself.` : `The driver pays for ${what} themselves.`;
+    return viewer === 'driver'
+      ? `You pay for ${what} from the takings, and approved costs come off what you owe the owner.`
+      : `The driver pays for ${what} from the takings, and approved costs come off what they owe you.`;
+  };
   return fuelBearer === otherCostsBearer
-    ? `${pays(fuelBearer)} for fuel and other costs.`
-    : `${pays(fuelBearer)} for fuel. ${pays(otherCostsBearer)} other costs.`;
+    ? line(fuelBearer, 'fuel and other costs')
+    : `${line(fuelBearer, 'fuel')} ${line(otherCostsBearer, 'other costs')}`;
 }
 
 export interface OfferSummary {
@@ -125,15 +131,15 @@ export interface OfferSummary {
 export function offerSummary(offer: ArrangementRecord): OfferSummary {
   const { type, terms } = offer;
   const costs = [
-    { label: 'Fuel', value: offer.fuelBearer === 'driver' ? 'You pay' : 'Owner pays' },
-    { label: 'Other costs', value: offer.otherCostsBearer === 'driver' ? 'You pay' : 'Owner pays' },
+    { label: 'Fuel', value: offer.fuelBearer === 'driver' ? 'You pay' : 'Comes off what you owe' },
+    { label: 'Other costs', value: offer.otherCostsBearer === 'driver' ? 'You pay' : 'Comes off what you owe' },
     { label: 'Starts', value: formatDay(offer.effectiveFrom) },
   ];
   switch (type) {
     case 'fixed_target':
       return {
         headline: kwacha(terms.dailyTarget!),
-        headlineLabel: 'You pay the owner each working day',
+        headlineLabel: 'Your cashing to the owner each working day',
         rows: [{ label: 'You keep', value: 'The rest' }, ...costs],
       };
     case 'revenue_share':
@@ -163,6 +169,22 @@ export function offerSummary(offer: ArrangementRecord): OfferSummary {
 
 export function formatDay(date: string): string {
   return new Date(`${date}T00:00:00`).toLocaleDateString('en-GB', { day: 'numeric', month: 'long' });
+}
+
+/** A time of day, such as 06:30, or nothing if it is missing. */
+export function formatTime(at: string | null | undefined): string {
+  if (!at) return '';
+  const date = new Date(at);
+  return Number.isNaN(date.getTime()) ? '' : date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+}
+
+/** The span of a working day, such as "06:30 to 18:15", as far as it is known. */
+export function formatDaySpan(startedAt: string | null | undefined, endedAt: string | null | undefined): string {
+  const start = formatTime(startedAt);
+  const end = formatTime(endedAt);
+  if (start && end) return `${start} to ${end}`;
+  if (start) return `Started at ${start}`;
+  return end ? `Finished at ${end}` : '';
 }
 
 /** Today on the phone's calendar, as the server expects it. */

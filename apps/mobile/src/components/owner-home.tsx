@@ -2,16 +2,18 @@ import { currentDayForVehicle, summariseDay } from '@dt/domain';
 import { router, Stack } from 'expo-router';
 import { RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { DayStatusPill, HomeHeader, MoreSection, type Business } from '@/components/home-parts';
+import { DayStatusPill, HomeHeader, initialsOf, QuickLinks, type Business } from '@/components/home-parts';
+import { Icon } from '@/components/icons';
 import { Text } from '@/components/text';
-import { Button, Card, EmptyState, ListRow, LoadError, Pill, ScreenLoading, Section } from '@/components/ui';
+import { Avatar, Button, Card, EmptyState, ListRow, LoadError, Pill, ScreenLoading, Section } from '@/components/ui';
 import { formatDay, kwacha, localDate, type ArrangementRecord } from '@/lib/arrangements';
-import { useOwnerOverview } from '@/lib/business';
-import { colors, radius, space, type } from '@/lib/theme';
+import { costCategoryLabel, reportKindLabel, useOwnerOverview } from '@/lib/business';
+import { colors, radius, space, themedStyles, type } from '@/lib/theme';
 
 function arrangementPill(arrangements: ArrangementRecord[]) {
   if (arrangements.some((a) => a.status === 'proposed')) return <Pill label="Waiting for driver" tone="waiting" />;
-  if (arrangements.some((a) => a.status === 'active')) return <Pill label="Agreed" tone="ok" />;
+  // The home screen is about today: this is only reached when the bus has no day yet.
+  if (arrangements.some((a) => a.status === 'active')) return <Pill label="Not started" tone="neutral" />;
   if (arrangements.some((a) => a.status === 'declined')) return <Pill label="Declined" tone="problem" />;
   return <Pill label="No driver" tone="neutral" />;
 }
@@ -30,7 +32,11 @@ export function OwnerHome({ business }: { business: Business }) {
   });
   const summaries = days.map((day) => summariseDay(overview?.entries ?? [], overview?.costs ?? [], day.id));
   const total = (pick: (s: (typeof summaries)[number]) => number) => summaries.reduce((sum, s) => sum + pick(s), 0);
-  const needsYou = (overview?.toCheck.length ?? 0) + (overview?.paymentsToCheck.length ?? 0);
+  const needsYou =
+    (overview?.toCheck.length ?? 0) +
+    (overview?.costsToCheck.length ?? 0) +
+    (overview?.paymentsToCheck.length ?? 0) +
+    (overview?.reportsToCheck.length ?? 0);
 
   return (
     <ScrollView
@@ -46,25 +52,45 @@ export function OwnerHome({ business }: { business: Business }) {
         <>
           {buses.length > 0 ? (
             <View style={styles.hero}>
-              <Text style={styles.heroLabel}>Takings today</Text>
+              <View style={styles.heroTop}>
+                <Text style={styles.heroLabel}>Takings today</Text>
+                <Text style={styles.heroLabel}>{formatDay(today)}</Text>
+              </View>
               <Text style={styles.heroAmount} adjustsFontSizeToFit numberOfLines={1}>
                 {kwacha(total((s) => s.takings))}
               </Text>
               <View style={styles.heroStats}>
                 <HeroStat label="Handed to you" value={kwacha(total((s) => s.handedOver))} />
                 <HeroStat label="Costs" value={kwacha(total((s) => s.costsFromCash))} />
-                <HeroStat label="To check" value={String(needsYou)} />
+                <HeroStat label="Buses running" value={`${days.filter((d) => d.odometerEnd === null).length} of ${buses.length}`} />
               </View>
             </View>
           ) : null}
 
+          {buses.length > 0 ? <QuickLinks /> : null}
+
           {needsYou > 0 ? (
-            <Section title="Needs you">
+            <Section title="Needs you" waiting={needsYou}>
               <Card style={styles.list}>
+                {overview.reportsToCheck.map((report, i) => (
+                  <ListRow
+                    key={report.id}
+                    first={i === 0}
+                    title={`${drivers.find((d) => d.id === report.driverId)?.name ?? 'Your driver'} reported: ${reportKindLabel(report.kind)}`}
+                    detail={[formatDay(report.serviceDate), buses.find((b) => b.id === report.vehicleId)?.plate].filter(Boolean).join(' · ')}
+                    right={
+                      <Button
+                        compact
+                        label="Check"
+                        onPress={() => router.push({ pathname: '/check-report', params: { report: report.id } })}
+                      />
+                    }
+                  />
+                ))}
                 {overview.paymentsToCheck.map((payment, i) => (
                   <ListRow
                     key={payment.id}
-                    first={i === 0}
+                    first={i === 0 && overview.reportsToCheck.length === 0}
                     title={`${drivers.find((d) => d.id === payment.driverId)?.name ?? 'Your driver'} says they paid you ${kwacha(payment.amount)}`}
                     detail={`For ${formatDay(payment.serviceDate)}`}
                     right={
@@ -89,7 +115,7 @@ export function OwnerHome({ business }: { business: Business }) {
                   return (
                     <ListRow
                       key={entry.id}
-                      first={i === 0 && overview.paymentsToCheck.length === 0}
+                      first={i === 0 && overview.paymentsToCheck.length === 0 && overview.reportsToCheck.length === 0}
                       title={
                         entry.kind === 'remittance'
                           ? `${driver} handed you ${kwacha(entry.amount)}`
@@ -106,6 +132,21 @@ export function OwnerHome({ business }: { business: Business }) {
                     />
                   );
                 })}
+                {overview.costsToCheck.map(({ cost, vehicleId, driverId }, i) => (
+                  <ListRow
+                    key={cost.id}
+                    first={i === 0 && overview.paymentsToCheck.length === 0 && overview.toCheck.length === 0 && overview.reportsToCheck.length === 0}
+                    title={`${drivers.find((d) => d.id === driverId)?.name ?? 'Your driver'} spent ${kwacha(cost.amount)}`}
+                    detail={[costCategoryLabel(cost.category), buses.find((b) => b.id === vehicleId)?.plate].filter(Boolean).join(' · ')}
+                    right={
+                      <Button
+                        compact
+                        label="Check"
+                        onPress={() => router.push({ pathname: '/check-cost', params: { cost: cost.id } })}
+                      />
+                    }
+                  />
+                ))}
               </Card>
             </Section>
           ) : null}
@@ -126,12 +167,19 @@ export function OwnerHome({ business }: { business: Business }) {
                     .filter((a) => a.status !== 'declined')
                     .map((a) => drivers.find((d) => d.id === a.driverId)?.name)
                     .filter(Boolean);
+                  const who = names.length > 0 ? [...new Set(names)].join(', ') : 'Tap to assign a driver';
+                  const takings = day ? summariseDay(overview.entries, overview.costs, day.id).takings : null;
                   return (
                     <ListRow
                       key={bus.id}
                       first={i === 0}
+                      leading={
+                        <View style={styles.busIcon}>
+                          <Icon name="bus" size={22} color={colors.owed} />
+                        </View>
+                      }
                       title={bus.plate}
-                      detail={names.length > 0 ? [...new Set(names)].join(', ') : 'Tap to assign a driver'}
+                      detail={takings === null ? who : `${who} · ${kwacha(takings)} today`}
                       right={day ? <DayStatusPill day={day} /> : arrangementPill(onBus)}
                       onPress={() => router.push({ pathname: '/bus', params: { bus: bus.id } })}
                     />
@@ -150,21 +198,28 @@ export function OwnerHome({ business }: { business: Business }) {
               />
             ) : (
               <Card style={styles.list}>
-                {drivers.map((driver, i) => (
-                  <ListRow
-                    key={driver.id}
-                    first={i === 0}
-                    title={driver.name ?? 'New driver'}
-                    detail={driver.phone ? `+${driver.phone}` : undefined}
-                  />
-                ))}
+                {drivers.map((driver, i) => {
+                  const agreed = arrangements.find((a) => a.driverId === driver.id && a.status === 'active');
+                  const plate = buses.find((b) => b.id === agreed?.vehicleId)?.plate;
+                  return (
+                    <ListRow
+                      key={driver.id}
+                      first={i === 0}
+                      leading={<Avatar initials={initialsOf(driver.name ?? 'New driver')} />}
+                      title={driver.name ?? 'New driver'}
+                      detail={[plate, driver.phone ? `+${driver.phone}` : null].filter(Boolean).join(' · ') || undefined}
+                      onPress={() => router.push({ pathname: '/driver', params: { driver: driver.id } })}
+                    />
+                  );
+                })}
               </Card>
             )}
           </Section>
         </>
       ) : null}
 
-      <MoreSection />
+      {/* Under the hero once there is a bus. Before that, the first steps come first. */}
+      {buses.length === 0 ? <QuickLinks /> : null}
     </ScrollView>
   );
 }
@@ -180,13 +235,22 @@ function HeroStat({ label, value }: { label: string; value: string }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   flex: { flex: 1 },
   content: { flexGrow: 1, paddingHorizontal: space(4) },
   list: { padding: 0, overflow: 'hidden' },
-  hero: { backgroundColor: colors.dark, borderRadius: radius.card, padding: space(5), marginTop: space(5) },
+  hero: { backgroundColor: colors.hero, borderRadius: radius.card, padding: space(5), marginTop: space(5) },
+  heroTop: { flexDirection: 'row', justifyContent: 'space-between', gap: space(3) },
   heroLabel: { ...type.small, color: colors.onDarkMuted },
-  heroAmount: { ...type.display, color: colors.onDark, marginTop: space(1), fontVariant: ['tabular-nums'] },
+  busIcon: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radius.control,
+    backgroundColor: colors.owedSoft,
+  },
+  heroAmount: { ...type.display, color: colors.primary, marginTop: space(1), fontVariant: ['tabular-nums'] },
   heroStats: {
     flexDirection: 'row',
     gap: space(3),
@@ -197,4 +261,4 @@ const styles = StyleSheet.create({
   },
   heroStatLabel: { ...type.small, color: colors.onDarkMuted },
   heroStatValue: { ...type.heading, color: colors.onDark, marginTop: 2, fontVariant: ['tabular-nums'] },
-});
+}));

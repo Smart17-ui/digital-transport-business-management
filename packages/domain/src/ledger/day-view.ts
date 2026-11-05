@@ -7,8 +7,22 @@ export interface DayView {
   serviceDate: string;
   odometerStart: number;
   odometerEnd: number | null;
+  /** When the driver started and ended, by the phone's clock: the real moment, even with no signal. */
+  startedAt: string | null;
+  endedAt: string | null;
+  /** When each reached the server. Null until sent. The phone's clock can be wrong; this one cannot be changed. */
+  startSentAt: string | null;
+  endSentAt: string | null;
   /** True while part of this day exists only on the phone. */
   unsent: boolean;
+}
+
+const LATE_SEND_MS = 60 * 60 * 1000;
+
+/** True when an entry reached the server over an hour from the phone's time: no signal for a while, or a wrong clock. */
+export function sentLongAfter(at: string | null, sentAt: string | null): boolean {
+  if (!at || !sentAt) return false;
+  return Math.abs(Date.parse(sentAt) - Date.parse(at)) > LATE_SEND_MS;
 }
 
 export interface QueuedDayCommand {
@@ -45,6 +59,9 @@ export interface DayCost {
   paidBy: 'driver_cash' | 'advance' | 'owner';
   /** Who the server said bears this cost. Absent until it has been sent. */
   borneBy?: 'owner' | 'driver';
+  status: 'pending' | 'approved' | 'declined';
+  /** Why the Owner rejected it. */
+  reason: string | null;
   note: string;
   at: string;
   unsent: boolean;
@@ -104,6 +121,8 @@ export function applyQueuedEntries(
           amount: p.amount,
           litres: p.litres,
           paidBy: p.paidBy,
+          status: 'pending',
+          reason: null,
           note: p.note,
           at,
           unsent: true,
@@ -161,6 +180,10 @@ export function applyQueuedDayCommands(days: readonly DayView[], queued: readonl
           serviceDate: p.serviceDate,
           odometerStart: p.odometerStart,
           odometerEnd: null,
+          startedAt: command.deviceTime ?? null,
+          endedAt: null,
+          startSentAt: null,
+          endSentAt: null,
           unsent: true,
         });
       }
@@ -169,6 +192,7 @@ export function applyQueuedDayCommands(days: readonly DayView[], queued: readonl
       const day = result.find((d) => d.id === p.tripDayId);
       if (day) {
         day.odometerEnd = p.odometerEnd;
+        day.endedAt = command.deviceTime ?? null;
         day.unsent = true;
       }
     }

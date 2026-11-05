@@ -2,14 +2,9 @@ import type { DayCost, DayEntry } from '@dt/domain';
 import { StyleSheet, View } from 'react-native';
 import { Text } from '@/components/text';
 import { Pill } from '@/components/ui';
-import { kwacha } from '@/lib/arrangements';
+import { formatTime, kwacha } from '@/lib/arrangements';
 import { costCategoryLabel } from '@/lib/business';
-import { colors, space } from '@/lib/theme';
-
-function time(at: string): string {
-  const date = new Date(at);
-  return Number.isNaN(date.getTime()) ? '' : date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
-}
+import { colors, space, themedStyles } from '@/lib/theme';
 
 function entryLabel(entry: DayEntry, viewer: 'owner' | 'driver'): string {
   if (entry.amount < 0) return 'Correction';
@@ -22,6 +17,13 @@ function EntryPill({ entry, corrected, viewer }: { entry: DayEntry; corrected: b
   if (corrected) return <Pill label="Corrected" tone="neutral" />;
   if (entry.status === 'confirmed') return <Pill label="Confirmed" tone="ok" />;
   if (entry.status === 'disputed') return <Pill label="Disputed" tone="problem" />;
+  return <Pill label={viewer === 'owner' ? 'Needs checking' : 'Waiting for owner'} tone="waiting" />;
+}
+
+function CostPill({ cost, viewer }: { cost: DayCost; viewer: 'owner' | 'driver' }) {
+  if (cost.unsent) return <Pill label="Saved, not sent yet" tone="neutral" />;
+  if (cost.status === 'declined') return <Pill label="Rejected" tone="problem" />;
+  if (cost.status === 'approved') return <Pill label="Approved" tone="ok" />;
   return <Pill label={viewer === 'owner' ? 'Needs checking' : 'Waiting for owner'} tone="waiting" />;
 }
 
@@ -41,7 +43,7 @@ export function DayActivity(props: { entries: DayEntry[]; costs: DayCost[]; view
     <View style={styles.list}>
       {items.map(({ key, at, entry, cost }) => (
         <View key={key} style={styles.item}>
-          <Text style={styles.time}>{time(at)}</Text>
+          <Text style={styles.time}>{formatTime(at)}</Text>
           <View style={styles.flex}>
             {entry ? (
               <>
@@ -60,11 +62,10 @@ export function DayActivity(props: { entries: DayEntry[]; costs: DayCost[]; view
                   {cost.litres ? ` · ${cost.litres} L` : ''}
                 </Text>
                 {cost.note ? <Text style={styles.note}>{cost.note}</Text> : null}
-                {cost.unsent ? (
-                  <View style={styles.pill}>
-                    <Pill label="Saved, not sent yet" tone="neutral" />
-                  </View>
-                ) : null}
+                <View style={styles.pill}>
+                  <CostPill cost={cost} viewer={props.viewer} />
+                </View>
+                {cost.status === 'declined' && cost.reason ? <Text style={styles.note}>{cost.reason}</Text> : null}
               </>
             ) : null}
           </View>
@@ -77,7 +78,7 @@ export function DayActivity(props: { entries: DayEntry[]; costs: DayCost[]; view
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   flex: { flex: 1 },
   list: { marginTop: space(1) },
   item: { flexDirection: 'row', gap: space(3), paddingVertical: space(3), borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border },
@@ -86,4 +87,4 @@ const styles = StyleSheet.create({
   note: { fontSize: 13, lineHeight: 18, color: colors.muted, marginTop: 2 },
   pill: { flexDirection: 'row', marginTop: space(1) },
   amount: { fontSize: 15, fontWeight: '700', color: colors.text, fontVariant: ['tabular-nums'] },
-});
+}));

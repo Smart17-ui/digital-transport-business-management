@@ -2,7 +2,7 @@ import { parseKwacha } from '@dt/domain';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { Icon } from '@/components/icons';
 import { Text } from '@/components/text';
-import { colors, radius, space, TAP_TARGET } from '@/lib/theme';
+import { colors, radius, space, TAP_TARGET, themedStyles } from '@/lib/theme';
 
 const KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0', 'back'] as const;
 
@@ -40,7 +40,7 @@ export function AmountPad({ onChange }: { onChange: (update: (current: string) =
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   keypad: { flex: 1, flexDirection: 'row', flexWrap: 'wrap', gap: space(2), alignContent: 'stretch' },
   key: {
     flexBasis: '31%',
@@ -55,4 +55,4 @@ const styles = StyleSheet.create({
   },
   pressed: { opacity: 0.6 },
   keyText: { fontSize: 24, fontWeight: '700', color: colors.text, fontVariant: ['tabular-nums'] },
-});
+}));

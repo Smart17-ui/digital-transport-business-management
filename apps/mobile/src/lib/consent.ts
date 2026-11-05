@@ -8,7 +8,7 @@
  * blanks below are filled in.
  */
 export const NOTICE_IS_DRAFT = true;
-export const NOTICE_VERSION = 'draft-1';
+export const NOTICE_VERSION = 'draft-3';
 export const CONSENT_SCOPE = 'data_notice';
 
 export const NOTICE_SECTIONS: readonly { heading: string; body: string }[] = [

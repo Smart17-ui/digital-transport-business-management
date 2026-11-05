@@ -6,7 +6,7 @@ import { Text } from '@/components/text';
 import { BottomActions, Button, Card } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
 import { reasonFor, sendCommand } from '@/lib/commands';
-import { colors, space } from '@/lib/theme';
+import { colors, space, themedStyles } from '@/lib/theme';
 
 export default function Invite() {
   const { account } = useAuth();
@@ -84,11 +84,11 @@ export default function Invite() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   content: { padding: space(4), paddingBottom: space(8), flexGrow: 1 },
   intro: { fontSize: 16, lineHeight: 23, color: colors.muted },
   card: { alignItems: 'center', gap: space(2), paddingVertical: space(6) },
   detail: { fontSize: 14, lineHeight: 20, color: colors.muted, textAlign: 'center' },
   code: { fontSize: 40, fontWeight: '800', letterSpacing: 4, color: colors.text },
   error: { fontSize: 14, lineHeight: 20, color: colors.owes, marginTop: space(3) },
-});
+}));

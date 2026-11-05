@@ -1,6 +1,7 @@
+import { useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { Text, TextInput } from '@/components/text';
-import { colors, radius, space, TAP_TARGET } from '@/lib/theme';
+import { colors, radius, space, TAP_TARGET, themedStyles } from '@/lib/theme';
 
 export function TextField(props: {
   label: string;
@@ -9,7 +10,7 @@ export function TextField(props: {
   placeholder: string;
   maxLength: number;
   autoCapitalize?: 'characters' | 'words';
-  keyboardType?: 'number-pad';
+  keyboardType?: 'number-pad' | 'phone-pad';
   hint?: string;
 }) {
   return (
@@ -27,6 +28,47 @@ export function TextField(props: {
         keyboardType={props.keyboardType}
         accessibilityLabel={props.label}
       />
+      {props.hint ? <Text style={styles.hint}>{props.hint}</Text> : null}
+    </View>
+  );
+}
+
+/** A password box with Show and Hide, because mistyping on a small phone is the commonest failure. */
+export function PasswordField(props: {
+  label: string;
+  value: string;
+  onChange: (text: string) => void;
+  autoComplete: 'current-password' | 'new-password';
+  hint?: string;
+  onSubmit?: () => void;
+}) {
+  const [visible, setVisible] = useState(false);
+  return (
+    <View style={styles.field}>
+      <Text style={styles.label}>{props.label}</Text>
+      <View style={styles.passwordBox}>
+        <TextInput
+          style={styles.passwordInput}
+          value={props.value}
+          onChangeText={props.onChange}
+          onSubmitEditing={props.onSubmit}
+          secureTextEntry={!visible}
+          autoCapitalize="none"
+          autoCorrect={false}
+          autoComplete={props.autoComplete}
+          textContentType={props.autoComplete === 'new-password' ? 'newPassword' : 'password'}
+          accessibilityLabel={props.label}
+        />
+        <Pressable
+          onPress={() => setVisible(!visible)}
+          accessibilityRole="button"
+          accessibilityLabel={visible ? 'Hide password' : 'Show password'}
+          hitSlop={8}
+          style={styles.passwordToggle}
+        >
+          <Text style={styles.passwordToggleText}>{visible ? 'Hide' : 'Show'}</Text>
+        </Pressable>
+      </View>
       {props.hint ? <Text style={styles.hint}>{props.hint}</Text> : null}
     </View>
   );
@@ -99,7 +141,7 @@ export function Choice<T extends string>(props: {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   field: { marginBottom: space(4) },
   label: { fontSize: 14, lineHeight: 20, fontWeight: '500', color: colors.text, marginBottom: space(1.5) },
   textInput: {
@@ -112,6 +154,18 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: colors.text,
   },
+  passwordBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    minHeight: TAP_TARGET,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.borderStrong,
+    borderRadius: radius.control,
+  },
+  passwordInput: { flex: 1, minHeight: TAP_TARGET - 2, paddingHorizontal: space(3.5), fontSize: 16, color: colors.text },
+  passwordToggle: { paddingHorizontal: space(3.5), minHeight: TAP_TARGET - 2, justifyContent: 'center' },
+  passwordToggleText: { fontSize: 14, lineHeight: 20, fontWeight: '600', color: colors.text },
   card: {
     backgroundColor: colors.surface,
     borderWidth: 1,
@@ -141,4 +195,4 @@ const styles = StyleSheet.create({
   optionSelected: { backgroundColor: colors.primary, borderColor: colors.primary },
   optionText: { fontSize: 14, fontWeight: '600', color: colors.text },
   optionTextSelected: { color: colors.primaryText },
-});
+}));

@@ -8,7 +8,7 @@ import { BottomActions, Button } from '@/components/ui';
 import { kwacha } from '@/lib/arrangements';
 import { useAuth } from '@/lib/auth';
 import { enqueue } from '@/lib/queue';
-import { colors, space } from '@/lib/theme';
+import { colors, space, themedStyles } from '@/lib/theme';
 
 export default function RecordCash() {
   const params = useLocalSearchParams<{ day: string; kind: string }>();
@@ -67,9 +67,9 @@ export default function RecordCash() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   flex: { flex: 1 },
   body: { flex: 1, padding: space(4) },
   amount: { fontSize: 52, fontWeight: '800', color: colors.text, textAlign: 'center', marginTop: space(4), fontVariant: ['tabular-nums'] },
   helper: { fontSize: 14, lineHeight: 20, color: colors.muted, textAlign: 'center', marginTop: space(1), marginBottom: space(4) },
-});
+}));

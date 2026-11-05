@@ -23,7 +23,8 @@ export interface EstimateInput {
  * What the settlement would be if every entry still waiting were confirmed as
  * recorded, for a driver with no signal. It runs the server's own calculation, so
  * the two only differ where the phone cannot know something: entries the Owner
- * later disputes, and a bus marked off the road that the phone has not heard about.
+ * later disputes, costs the Owner later rejects, and a bus marked off the road that
+ * the phone has not heard about.
  */
 export function estimateSettlement(input: EstimateInput): SettlementStatement {
   const { day, arrangement } = input;
@@ -73,7 +74,10 @@ export function estimateSettlement(input: EstimateInput): SettlementStatement {
         late: false,
         reversesId: cost.reversesId,
         replacesId: null,
-        state: expenseStateFrom('approved', cost.amount, null),
+        state:
+          cost.status === 'declined'
+            ? expenseStateFrom('declined', null, cost.reason)
+            : expenseStateFrom('approved', cost.amount, null),
       };
     });
 

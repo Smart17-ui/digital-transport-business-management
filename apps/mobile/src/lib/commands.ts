@@ -1,4 +1,5 @@
 import type { CommandPayload, CommandResult, CommandType } from '@dt/domain';
+import { isAuthRetryableFetchError } from '@supabase/supabase-js';
 import { randomUUID } from 'expo-crypto';
 import { supabase } from '@/lib/supabase';
 
@@ -19,8 +20,16 @@ export interface OutgoingCommand {
 }
 
 /** Sends commands to the Command API, which applies them in order. Throws if the server cannot be reached. */
-export async function sendBatch(commands: OutgoingCommand[]): Promise<CommandResult[]> {
+export async function sendBatch(commands: OutgoingCommand[], retried = false): Promise<CommandResult[]> {
   const { data, error } = await supabase.functions.invoke<{ results: CommandResult[] }>('command', { body: { commands } });
+  if ((error as { context?: { status?: number } } | null)?.context?.status === 401) {
+    // Either the token ran out while the app slept, or the session was ended from another phone.
+    // Refreshing tells which, and signs this phone out if it was ended. A resend is harmless, thanks to clientId.
+    const refreshed = await supabase.auth.refreshSession();
+    if (refreshed.error) throw new CommandError(isAuthRetryableFetchError(refreshed.error) ? 'network' : 'session_expired');
+    if (!retried) return sendBatch(commands, true);
+    throw new CommandError('session_expired');
+  }
   if (error || !data?.results) throw new CommandError('network');
   return data.results;
 }
@@ -43,6 +52,7 @@ export async function sendCommand<T extends CommandType>(
 
 const REASONS: Record<string, string> = {
   network: 'Could not reach the server. Check your signal and try again.',
+  session_expired: 'You have been signed out. Sign in again. Anything saved on this phone is safe.',
   'invite.invalid_or_expired': 'That invite code is wrong, used or expired. Ask the owner for a new one.',
   'invite.already_member': 'You are already part of this business.',
   'vehicle.plate_taken': 'You already have a bus with this number plate.',
@@ -63,6 +73,17 @@ const REASONS: Record<string, string> = {
   'day.not_found': 'We could not find this day. If starting it was also refused, that is why.',
   'handover.amount_not_positive': 'Enter an amount above zero.',
   'handover.method_not_available': 'Only cash can be recorded for now.',
+  'report.only_driver_reports': 'Only a driver can report a problem with a day.',
+  'report.date_in_future': 'A problem cannot be reported for a date still to come.',
+  'report.not_your_bus': 'You do not have an agreement on this bus.',
+  'report.already_reported': 'You have already reported a problem for this date.',
+  'report.not_found': 'We could not find this report.',
+  'report.already_decided': 'This report has already been answered.',
+  'report.reason_required': 'Say why you are rejecting this report.',
+  'arrangement.bus_in_use': 'This bus has a day running with another driver. Try again once that day has ended.',
+  'expense.not_found': 'We could not find this cost.',
+  'expense.already_decided': 'This cost has already been answered.',
+  'expense.decline_reason_required': 'Say why you are rejecting this cost.',
   'expense.amount_not_positive': 'Enter an amount above zero.',
   'expense.unknown_category': 'That type of cost is not recognised.',
   'expense.litres_not_positive': 'Enter the litres as a number above zero, or leave it empty.',

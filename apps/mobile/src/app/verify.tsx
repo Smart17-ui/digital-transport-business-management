@@ -3,15 +3,18 @@ import { useEffect, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, StyleSheet, View } from 'react-native';
 import { Text, TextInput } from '@/components/text';
 import { Button } from '@/components/ui';
+import { useAuth } from '@/lib/auth';
 import { codeErrorMessage } from '@/lib/auth-errors';
 import { supabase } from '@/lib/supabase';
-import { colors, radius, space, TAP_TARGET } from '@/lib/theme';
+import { colors, radius, space, TAP_TARGET, themedStyles } from '@/lib/theme';
 
 const CODE_LENGTH = 6;
 const RESEND_SECONDS = 60;
 
 export default function Verify() {
-  const { phone } = useLocalSearchParams<{ phone: string }>();
+  const { phone, mode } = useLocalSearchParams<{ phone: string; mode: string }>();
+  const reset = mode === 'reset';
+  const { startPasswordReset, cancelPasswordReset } = useAuth();
   const [code, setCode] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [checking, setChecking] = useState(false);
@@ -27,9 +30,12 @@ export default function Verify() {
   const check = async (token: string) => {
     setError(null);
     setChecking(true);
+    // Marked first, so that a correct code leads straight to setting a password and nowhere else.
+    await startPasswordReset();
     const { error: failed } = await supabase.auth.verifyOtp({ phone, token, type: 'sms' });
     setChecking(false);
     if (failed) {
+      await cancelPasswordReset();
       setCode('');
       setError(codeErrorMessage(failed));
     }
@@ -44,7 +50,7 @@ export default function Verify() {
   const resend = async () => {
     setError(null);
     setWait(RESEND_SECONDS);
-    const { error: failed } = await supabase.auth.signInWithOtp({ phone });
+    const { error: failed } = await supabase.auth.signInWithOtp({ phone, options: { shouldCreateUser: !reset } });
     if (failed) setError(codeErrorMessage(failed));
   };
 
@@ -89,7 +95,7 @@ export default function Verify() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   screen: { flex: 1 },
   body: { flex: 1, padding: space(5) },
   intro: { fontSize: 16, lineHeight: 23, color: colors.muted, marginBottom: space(5) },
@@ -111,4 +117,4 @@ const styles = StyleSheet.create({
   resendWait: { fontSize: 14, color: colors.muted, textAlign: 'center', marginTop: space(4) },
   resend: { alignItems: 'center', marginTop: space(4) },
   resendLink: { fontSize: 15, fontWeight: '600', color: colors.text, textDecorationLine: 'underline' },
-});
+}));

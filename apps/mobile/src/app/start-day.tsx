@@ -8,7 +8,7 @@ import { BottomActions, Button } from '@/components/ui';
 import { localDate } from '@/lib/arrangements';
 import { useAuth } from '@/lib/auth';
 import { enqueue } from '@/lib/queue';
-import { colors, space } from '@/lib/theme';
+import { colors, space, themedStyles } from '@/lib/theme';
 
 export default function StartDay() {
   const { bus, plate } = useLocalSearchParams<{ bus: string; plate: string }>();
@@ -53,8 +53,8 @@ export default function StartDay() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   flex: { flex: 1 },
   content: { padding: space(4), paddingBottom: space(8) },
   intro: { fontSize: 16, lineHeight: 23, color: colors.muted, marginBottom: space(5) },
-});
+}));

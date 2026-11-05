@@ -7,7 +7,7 @@ import { Text } from '@/components/text';
 import { BottomActions, Button } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
 import { reasonFor, sendCommand } from '@/lib/commands';
-import { colors, space } from '@/lib/theme';
+import { colors, space, themedStyles } from '@/lib/theme';
 
 type Path = 'owner' | 'driver';
 
@@ -107,9 +107,9 @@ export default function Setup() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   flex: { flex: 1 },
   content: { padding: space(4), paddingBottom: space(8) },
   label: { fontSize: 15, fontWeight: '600', color: colors.text, marginBottom: space(1.5) },
   error: { fontSize: 14, lineHeight: 20, color: colors.owes },
-});
+}));

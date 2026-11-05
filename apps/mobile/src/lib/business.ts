@@ -14,29 +14,77 @@ import { useCallback, useState } from 'react';
 import { localDate, type ArrangementRecord } from '@/lib/arrangements';
 import { supabase } from '@/lib/supabase';
 
-export const BUS_TYPES = [
+export const VEHICLE_TYPES = [
   { value: 'minibus', label: 'Minibus' },
   { value: 'coaster', label: 'Coaster' },
   { value: 'bus', label: 'Large bus' },
 ] as const;
 
-export type BusType = (typeof BUS_TYPES)[number]['value'];
+export type VehicleType = (typeof VEHICLE_TYPES)[number]['value'];
 
 export interface Bus {
   id: string;
   plate: string;
   type: string;
+  addedAt: string;
 }
 
 export interface Driver {
   id: string;
   name: string | null;
   phone: string | null;
+  joinedAt: string;
+}
+
+/** The person who owns the business, for a driver to reach. */
+export interface Owner {
+  name: string | null;
+  phone: string | null;
+}
+
+/** What a bus or a driver has done, from finished days. */
+export interface WorkRecord {
+  daysWorked: number;
+  lastWorked: string | null;
+  distance: number;
+  lastOdometer: number | null;
 }
 
 /** An entry the Owner has not checked yet, with who and which bus it is about. */
 export interface EntryToCheck {
   entry: DayEntry;
+  vehicleId: string;
+  driverId: string;
+}
+
+export const REPORT_KINDS = [
+  { value: 'breakdown', label: 'Breakdown' },
+  { value: 'off_road', label: 'Off the road' },
+  { value: 'sick', label: 'Sick' },
+  { value: 'other', label: 'Other' },
+] as const;
+
+export type ReportKind = (typeof REPORT_KINDS)[number]['value'];
+
+export function reportKindLabel(kind: string): string {
+  return REPORT_KINDS.find((k) => k.value === kind)?.label ?? kind;
+}
+
+/** A driver's explanation of a day, and the Owner's answer. */
+export interface DayReport {
+  id: string;
+  vehicleId: string;
+  driverId: string;
+  serviceDate: string;
+  kind: string;
+  reason: string;
+  status: 'pending' | 'accepted' | 'rejected';
+  decisionReason: string | null;
+}
+
+/** A cost waiting for the Owner's answer, with who and which bus it is about. */
+export interface CostToCheck {
+  cost: DayCost;
   vehicleId: string;
   driverId: string;
 }
@@ -64,12 +112,16 @@ export interface DaySettlement {
   latestClosedId: string | null;
   /** Why a payment was refused or undone, by payment id. */
   paymentReasons: Record<string, string>;
+  /** When the day started and ended: by the phone's clock, and when each reached the server. */
+  times: { startedAt: string | null; endedAt: string | null; startSentAt: string | null; endSentAt: string | null };
 }
 
 /** A finished day in the history list. */
 export interface HistoryDay {
   id: string;
   serviceDate: string;
+  startedAt: string | null;
+  endedAt: string | null;
   plate: string;
   driverName: string | null;
   distance: number | null;
@@ -103,10 +155,13 @@ export interface OwnerOverview {
   entries: DayEntry[];
   costs: DayCost[];
   toCheck: EntryToCheck[];
+  costsToCheck: CostToCheck[];
   paymentsToCheck: PaymentToCheck[];
+  reportsToCheck: DayReport[];
 }
 
 export interface DriverOverview {
+  owner: Owner | null;
   buses: Bus[];
   arrangements: ArrangementRecord[];
   days: DayView[];
@@ -119,24 +174,33 @@ export interface DriverOverview {
   saved: boolean;
 }
 
-export function busTypeLabel(type: string): string {
-  return BUS_TYPES.find((t) => t.value === type)?.label ?? type;
+export function vehicleTypeLabel(type: string): string {
+  return VEHICLE_TYPES.find((t) => t.value === type)?.label ?? type;
 }
 
 async function fetchBuses(businessId: string): Promise<Bus[]> {
   const { data, error } = await supabase
     .from('vehicles')
-    .select('id, plate, vehicle_type')
+    .select('id, plate, vehicle_type, created_at')
     .eq('business_id', businessId)
     .order('created_at');
   if (error) throw error;
-  return data.map((v) => ({ id: v.id, plate: v.plate, type: v.vehicle_type }));
+  return data.map((v) => ({ id: v.id, plate: v.plate, type: v.vehicle_type, addedAt: v.created_at }));
+}
+
+async function fetchOwner(businessId: string): Promise<Owner | null> {
+  const business = await supabase.from('businesses').select('owner_id').eq('id', businessId).maybeSingle();
+  if (business.error) throw business.error;
+  if (!business.data) return null;
+  const profile = await supabase.from('profiles').select('display_name, phone').eq('id', business.data.owner_id).maybeSingle();
+  if (profile.error) throw profile.error;
+  return { name: profile.data?.display_name ?? null, phone: profile.data?.phone ?? null };
 }
 
 async function fetchDrivers(businessId: string): Promise<Driver[]> {
   const memberships = await supabase
     .from('memberships')
-    .select('user_id')
+    .select('user_id, joined_at')
     .eq('business_id', businessId)
     .eq('role', 'driver')
     .is('ended_at', null)
@@ -148,9 +212,9 @@ async function fetchDrivers(businessId: string): Promise<Driver[]> {
   const profiles = await supabase.from('profiles').select('id, display_name, phone').in('id', driverIds);
   if (profiles.error) throw profiles.error;
 
-  return driverIds.map((id) => {
-    const profile = profiles.data.find((p) => p.id === id);
-    return { id, name: profile?.display_name ?? null, phone: profile?.phone ?? null };
+  return memberships.data.map((m) => {
+    const profile = profiles.data.find((p) => p.id === m.user_id);
+    return { id: m.user_id as string, name: profile?.display_name ?? null, phone: profile?.phone ?? null, joinedAt: m.joined_at as string };
   });
 }
 
@@ -198,7 +262,7 @@ async function fetchDays(businessId: string): Promise<DayView[]> {
   const since = localDate(new Date(Date.now() - RECENT_DAYS * 86_400_000));
   const { data, error } = await supabase
     .from('trip_days')
-    .select('id, vehicle_id, service_date, odometer_start, odometer_end')
+    .select('id, vehicle_id, service_date, odometer_start, odometer_end, started_at, ended_at, device_started_at, device_ended_at')
     .eq('business_id', businessId)
     .or(`ended_at.is.null,service_date.gte.${since}`)
     .order('started_at', { ascending: false });
@@ -209,6 +273,10 @@ async function fetchDays(businessId: string): Promise<DayView[]> {
     serviceDate: d.service_date,
     odometerStart: d.odometer_start,
     odometerEnd: d.odometer_end,
+    startedAt: d.device_started_at ?? d.started_at,
+    endedAt: d.device_ended_at ?? d.ended_at,
+    startSentAt: d.started_at,
+    endSentAt: d.ended_at,
     unsent: false,
   }));
 }
@@ -236,14 +304,11 @@ async function fetchEntries(dayIds: string[]): Promise<DayEntry[]> {
   return data.map(toEntry);
 }
 
-async function fetchCosts(dayIds: string[]): Promise<DayCost[]> {
-  if (dayIds.length === 0) return [];
-  const { data, error } = await supabase
-    .from('expenses_v')
-    .select('id, trip_day_id, category, reverses_id, amount_ngwee, litres, paid_by, borne_by, note, device_time, server_time')
-    .in('trip_day_id', dayIds);
-  if (error) throw error;
-  return data.map((row) => ({
+const COST_COLUMNS =
+  'id, trip_day_id, category, reverses_id, amount_ngwee, litres, paid_by, borne_by, status, decision_reason, note, device_time, server_time';
+
+function toCost(row: Record<string, unknown>): DayCost {
+  return {
     id: row.id,
     tripDayId: row.trip_day_id,
     category: row.category,
@@ -252,10 +317,61 @@ async function fetchCosts(dayIds: string[]): Promise<DayCost[]> {
     litres: row.litres === null ? null : Number(row.litres),
     paidBy: row.paid_by,
     borneBy: row.borne_by,
+    status: row.status,
+    reason: row.decision_reason,
     note: row.note,
     at: row.device_time ?? row.server_time,
     unsent: false,
-  }));
+  } as DayCost;
+}
+
+async function fetchCosts(dayIds: string[]): Promise<DayCost[]> {
+  if (dayIds.length === 0) return [];
+  const { data, error } = await supabase.from('expenses_v').select(COST_COLUMNS).in('trip_day_id', dayIds);
+  if (error) throw error;
+  return data.map(toCost);
+}
+
+/** Every cost waiting for the Owner, from any date. */
+async function fetchCostsToCheck(businessId: string): Promise<CostToCheck[]> {
+  const pending = await supabase
+    .from('expenses_v')
+    .select(COST_COLUMNS)
+    .eq('business_id', businessId)
+    .eq('status', 'pending')
+    .order('server_time');
+  if (pending.error) throw pending.error;
+  if (pending.data.length === 0) return [];
+
+  const costs = pending.data.map(toCost);
+  const days = await supabase
+    .from('trip_days')
+    .select('id, vehicle_id, driver_id')
+    .in('id', [...new Set(costs.map((c) => c.tripDayId))]);
+  if (days.error) throw days.error;
+
+  return costs.flatMap((cost) => {
+    const day = days.data.find((d) => d.id === cost.tripDayId);
+    return day ? [{ cost, vehicleId: day.vehicle_id as string, driverId: day.driver_id as string }] : [];
+  });
+}
+
+/** One cost, with its bus and driver, for the Owner to answer. */
+export async function fetchCostToCheck(id: string) {
+  const row = await supabase.from('expenses_v').select(COST_COLUMNS).eq('id', id).maybeSingle();
+  if (row.error) throw row.error;
+  if (!row.data) return { cost: null, plate: undefined, driverName: undefined };
+  const cost = toCost(row.data);
+
+  const day = await supabase.from('trip_days').select('vehicle_id, driver_id').eq('id', cost.tripDayId).single();
+  if (day.error) throw day.error;
+  const [vehicle, profile] = await Promise.all([
+    supabase.from('vehicles').select('plate').eq('id', day.data.vehicle_id).maybeSingle(),
+    supabase.from('profiles').select('display_name').eq('id', day.data.driver_id).maybeSingle(),
+  ]);
+  if (vehicle.error) throw vehicle.error;
+  if (profile.error) throw profile.error;
+  return { cost, plate: vehicle.data?.plate as string | undefined, driverName: profile.data?.display_name as string | null | undefined };
 }
 
 /** Everything waiting for the Owner, from any date, so an old entry is not forgotten. */
@@ -340,6 +456,10 @@ interface ClosedDayRow {
   service_date: string;
   odometer_start: number;
   odometer_end: number | null;
+  started_at: string;
+  ended_at: string | null;
+  device_started_at: string | null;
+  device_ended_at: string | null;
 }
 
 /** Finished days, oldest first, in the same order arrears use. Row level security limits a driver to their own. */
@@ -347,7 +467,7 @@ async function fetchClosedDays(businessId: string, driverId?: string): Promise<C
   return allPages<ClosedDayRow>((from, to) => {
     let query = supabase
       .from('trip_days')
-      .select('id, vehicle_id, driver_id, service_date, odometer_start, odometer_end')
+      .select('id, vehicle_id, driver_id, service_date, odometer_start, odometer_end, started_at, ended_at, device_started_at, device_ended_at')
       .eq('business_id', businessId)
       .not('ended_at', 'is', null);
     if (driverId) query = query.eq('driver_id', driverId);
@@ -373,6 +493,27 @@ function allocationFor(days: readonly ClosedDayRow[], balances: Awaited<ReturnTy
   );
 }
 
+/** `days` must be oldest first, as fetchClosedDays gives them. */
+function workRecord(days: readonly ClosedDayRow[]): WorkRecord {
+  const last = days[days.length - 1];
+  return {
+    daysWorked: days.length,
+    lastWorked: last?.service_date ?? null,
+    distance: days.reduce((sum, d) => sum + (d.odometer_end === null ? 0 : d.odometer_end - d.odometer_start), 0),
+    lastOdometer: last?.odometer_end ?? null,
+  };
+}
+
+export async function fetchBusRecord(businessId: string, busId: string): Promise<WorkRecord> {
+  return workRecord((await fetchClosedDays(businessId)).filter((d) => d.vehicle_id === busId));
+}
+
+/** `balance` is the running balance across all their days. Positive: the driver owes the owner. */
+export async function fetchDriverRecord(businessId: string, driverId: string): Promise<WorkRecord & { balance: number }> {
+  const [days, balances] = await Promise.all([fetchClosedDays(businessId, driverId), fetchBalances(businessId, driverId)]);
+  return { ...workRecord(days), balance: allocationFor(days, balances).balance };
+}
+
 /** The real settlement, worked out by the server, with the entries behind it. */
 export async function fetchDaySettlement(tripDayId: string): Promise<DaySettlement> {
   const [view, entries, costs] = await Promise.all([
@@ -386,12 +527,14 @@ export async function fetchDaySettlement(tripDayId: string): Promise<DaySettleme
   if (view.error || !view.data) throw view.error ?? new Error('No settlement returned');
 
   const { businessId, driverId } = view.data.tripDay;
-  const [closedDays, balances, reasons] = await Promise.all([
+  const [closedDays, balances, reasons, day] = await Promise.all([
     fetchClosedDays(businessId, driverId),
     fetchBalances(businessId, driverId),
     supabase.from('settlement_payments_v').select('id, decision_reason, reversal_reason').eq('trip_day_id', tripDayId),
+    supabase.from('trip_days').select('started_at, ended_at, device_started_at, device_ended_at').eq('id', tripDayId).single(),
   ]);
   if (reasons.error) throw reasons.error;
+  if (day.error) throw day.error;
   return {
     ...view.data,
     entries,
@@ -404,6 +547,79 @@ export async function fetchDaySettlement(tripDayId: string): Promise<DaySettleme
         return reason ? [[p.id as string, reason as string]] : [];
       }),
     ),
+    times: {
+      startedAt: day.data.device_started_at ?? day.data.started_at,
+      endedAt: day.data.device_ended_at ?? day.data.ended_at,
+      startSentAt: day.data.started_at,
+      endSentAt: day.data.ended_at,
+    },
+  };
+}
+
+const REPORT_COLUMNS = 'id, vehicle_id, driver_id, service_date, kind, reason, status, decision_reason';
+
+function toReport(row: Record<string, unknown>): DayReport {
+  return {
+    id: row.id,
+    vehicleId: row.vehicle_id,
+    driverId: row.driver_id,
+    serviceDate: row.service_date,
+    kind: row.kind,
+    reason: row.reason,
+    status: row.status,
+    decisionReason: row.decision_reason,
+  } as DayReport;
+}
+
+/** Row level security limits a driver to their own reports. */
+async function fetchReports(businessId: string): Promise<DayReport[]> {
+  const rows = await allPages<Record<string, unknown>>((from, to) =>
+    supabase.from('day_reports_v').select(REPORT_COLUMNS).eq('business_id', businessId).order('service_date').order('id').range(from, to),
+  );
+  return rows.map(toReport);
+}
+
+async function fetchReportsToCheck(businessId: string): Promise<DayReport[]> {
+  const { data, error } = await supabase
+    .from('day_reports_v')
+    .select(REPORT_COLUMNS)
+    .eq('business_id', businessId)
+    .eq('status', 'pending')
+    .order('created_at');
+  if (error) throw error;
+  return data.map(toReport);
+}
+
+/** One report, with its bus and driver, for the Owner to answer. */
+export async function fetchReportToCheck(id: string) {
+  const row = await supabase.from('day_reports_v').select(REPORT_COLUMNS).eq('id', id).maybeSingle();
+  if (row.error) throw row.error;
+  if (!row.data) return { report: null, plate: undefined, driverName: undefined };
+  const report = toReport(row.data);
+  const [vehicle, profile] = await Promise.all([
+    supabase.from('vehicles').select('plate').eq('id', report.vehicleId).maybeSingle(),
+    supabase.from('profiles').select('display_name').eq('id', report.driverId).maybeSingle(),
+  ]);
+  if (vehicle.error) throw vehicle.error;
+  if (profile.error) throw profile.error;
+  return { report, plate: vehicle.data?.plate as string | undefined, driverName: profile.data?.display_name as string | null | undefined };
+}
+
+/** Everything the calendar shows: days worked and reports, with the names to label them. */
+export async function fetchCalendar(businessId: string) {
+  const [days, reports, buses, drivers] = await Promise.all([
+    fetchHistory(businessId),
+    fetchReports(businessId),
+    fetchBuses(businessId),
+    fetchDrivers(businessId),
+  ]);
+  return {
+    days,
+    reports: reports.map((report) => ({
+      ...report,
+      plate: buses.find((b) => b.id === report.vehicleId)?.plate ?? '',
+      driverName: drivers.find((d) => d.id === report.driverId)?.name ?? null,
+    })),
   };
 }
 
@@ -422,6 +638,8 @@ export async function fetchHistory(businessId: string): Promise<HistoryDay[]> {
   return [...days].reverse().map((d) => ({
     id: d.id,
     serviceDate: d.service_date,
+    startedAt: d.device_started_at ?? d.started_at,
+    endedAt: d.device_ended_at ?? d.ended_at,
     plate: buses.find((b) => b.id === d.vehicle_id)?.plate ?? '',
     driverName: drivers.find((x) => x.id === d.driver_id)?.name ?? null,
     distance: d.odometer_end === null ? null : d.odometer_end - d.odometer_start,
@@ -487,17 +705,19 @@ export function useScreenData<T>(load: () => Promise<T>) {
 
 export function useOwnerOverview(businessId: string) {
   const load = useCallback(async (): Promise<OwnerOverview> => {
-    const [buses, drivers, arrangements, days, toCheck, paymentsToCheck] = await Promise.all([
+    const [buses, drivers, arrangements, days, toCheck, costsToCheck, paymentsToCheck, reportsToCheck] = await Promise.all([
       fetchBuses(businessId),
       fetchDrivers(businessId),
       fetchArrangements(businessId),
       fetchDays(businessId),
       fetchEntriesToCheck(businessId),
+      fetchCostsToCheck(businessId),
       fetchPaymentsToCheck(businessId, 'driver'),
+      fetchReportsToCheck(businessId),
     ]);
     const dayIds = days.map((d) => d.id);
     const [entries, costs] = await Promise.all([fetchEntries(dayIds), fetchCosts(dayIds)]);
-    return { buses, drivers, arrangements, days, entries, costs, toCheck, paymentsToCheck };
+    return { buses, drivers, arrangements, days, entries, costs, toCheck, costsToCheck, paymentsToCheck, reportsToCheck };
   }, [businessId]);
   return useScreenData(load);
 }
@@ -511,7 +731,8 @@ export function useDriverOverview(businessId: string, userId: string) {
   const load = useCallback(async (): Promise<DriverOverview> => {
     const key = `dt.driver-overview.${userId}.${businessId}`;
     try {
-      const [buses, arrangements, days, paymentsToCheck, balanceMap] = await Promise.all([
+      const [owner, buses, arrangements, days, paymentsToCheck, balanceMap] = await Promise.all([
+        fetchOwner(businessId),
         fetchBuses(businessId),
         fetchArrangements(businessId),
         fetchDays(businessId),
@@ -521,13 +742,14 @@ export function useDriverOverview(businessId: string, userId: string) {
       const dayIds = days.map((d) => d.id);
       const [entries, costs] = await Promise.all([fetchEntries(dayIds), fetchCosts(dayIds)]);
       const balances = [...balanceMap].map(([id, b]) => ({ id, left: b.owedForDay - b.paid }));
-      const overview = { buses, arrangements, days, entries, costs, paymentsToCheck, balances, saved: false };
+      const overview = { owner, buses, arrangements, days, entries, costs, paymentsToCheck, balances, saved: false };
       await Storage.setItem(key, JSON.stringify(overview));
       return overview;
     } catch (failure) {
       const saved = await Storage.getItem(key);
       if (saved === null) throw failure;
       return {
+        owner: null,
         entries: [],
         costs: [],
         paymentsToCheck: [],

@@ -7,7 +7,7 @@ import { BottomActions, Button, Note } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
 import { reasonFor, sendCommand } from '@/lib/commands';
 import { CONSENT_SCOPE, NOTICE_IS_DRAFT, NOTICE_SECTIONS, NOTICE_VERSION } from '@/lib/consent';
-import { colors, space } from '@/lib/theme';
+import { colors, space, themedStyles } from '@/lib/theme';
 
 export default function Consent() {
   const { refresh, signOut } = useAuth();
@@ -55,11 +55,11 @@ export default function Consent() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   content: { padding: space(4), paddingBottom: space(8) },
   intro: { fontSize: 16, lineHeight: 23, color: colors.muted },
   section: { marginTop: space(5) },
   heading: { fontSize: 16, fontWeight: '700', color: colors.text, marginBottom: space(1) },
   body: { fontSize: 15, lineHeight: 22, color: colors.text },
   error: { fontSize: 14, lineHeight: 20, color: colors.owes, marginTop: space(4) },
-});
+}));

@@ -3,6 +3,7 @@ import {
   applyQueuedDayCommands,
   applyQueuedEntries,
   currentDayForVehicle,
+  sentLongAfter,
   summariseDay,
   type DayCost,
   type DayEntry,
@@ -30,6 +31,8 @@ const cost = (over: Partial<DayCost> = {}): DayCost => ({
   amount: 20_000,
   litres: null,
   paidBy: 'driver_cash',
+  status: 'approved',
+  reason: null,
   note: '',
   at: '2026-11-03T09:00:00Z',
   unsent: false,
@@ -72,7 +75,7 @@ describe('applyQueuedEntries', () => {
     expect(entries).toEqual([
       entry({ kind: 'remittance', amount: 50_000, status: 'pending', at: '2026-11-03T10:00:00Z', unsent: true }),
     ]);
-    expect(costs).toEqual([cost({ litres: 15.5, at: '2026-11-03T11:00:00Z', unsent: true })]);
+    expect(costs).toEqual([cost({ litres: 15.5, status: 'pending', at: '2026-11-03T11:00:00Z', unsent: true })]);
   });
 
   it('does not repeat what the server already has when the reply was lost', () => {
@@ -137,6 +140,10 @@ const day = (over: Partial<DayView> = {}): DayView => ({
   serviceDate: '2026-11-03',
   odometerStart: 1000,
   odometerEnd: null,
+  startedAt: null,
+  endedAt: null,
+  startSentAt: null,
+  endSentAt: null,
   unsent: false,
   ...over,
 });
@@ -146,6 +153,31 @@ const start = {
   payload: { tripDayId: 'day-1', vehicleId: 'bus-1', serviceDate: '2026-11-03', odometerStart: 1000 },
 };
 const end = { type: 'end_day', payload: { tripDayId: 'day-1', odometerEnd: 1250 } };
+
+describe('day times', () => {
+  it('keeps the phone time of a day started and ended with no signal', () => {
+    const [shown] = applyQueuedDayCommands(
+      [],
+      [
+        { ...start, deviceTime: '2026-11-03T04:00:00Z' },
+        { ...end, deviceTime: '2026-11-03T16:30:00Z' },
+      ],
+    );
+    expect(shown).toMatchObject({ startedAt: '2026-11-03T04:00:00Z', endedAt: '2026-11-03T16:30:00Z', startSentAt: null });
+  });
+
+  it('flags an entry that reached the server over an hour from the phone time, in either direction', () => {
+    expect(sentLongAfter('2026-11-03T04:00:00Z', '2026-11-03T06:30:00Z')).toBe(true);
+    expect(sentLongAfter('2026-11-03T06:30:00Z', '2026-11-03T04:00:00Z')).toBe(true);
+    expect(sentLongAfter('2026-11-03T04:00:00Z', '2026-11-03T04:30:00Z')).toBe(false);
+    expect(sentLongAfter('2026-11-03T04:00:00Z', '2026-11-03T05:00:00Z')).toBe(false);
+  });
+
+  it('flags nothing while a time is missing', () => {
+    expect(sentLongAfter(null, '2026-11-03T06:30:00Z')).toBe(false);
+    expect(sentLongAfter('2026-11-03T04:00:00Z', null)).toBe(false);
+  });
+});
 
 describe('applyQueuedDayCommands', () => {
   it('shows a day started with no signal', () => {

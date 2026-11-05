@@ -3,7 +3,7 @@ import { ActivityIndicator, Pressable, StyleSheet, View, type StyleProp, type Vi
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon, type IconName } from '@/components/icons';
 import { Text } from '@/components/text';
-import { colors, radius, space, TAP_TARGET, type } from '@/lib/theme';
+import { colors, radius, space, TAP_TARGET, themedStyles, type } from '@/lib/theme';
 
 export function Card({ children, style }: { children: ReactNode; style?: StyleProp<ViewStyle> }) {
   return <View style={[styles.card, style]}>{children}</View>;
@@ -18,13 +18,22 @@ export function SectionTitle({ children }: { children: ReactNode }) {
 }
 
 /** A titled part of a screen, with an optional small action on the right. */
-export function Section(props: { title: string; action?: { label: string; onPress: () => void }; children: ReactNode }) {
+export function Section(props: {
+  title: string;
+  /** How many things here are waiting, shown beside the title. */
+  waiting?: number;
+  action?: { label: string; onPress: () => void };
+  children: ReactNode;
+}) {
   return (
     <View style={styles.section}>
       <View style={styles.sectionHeading}>
-        <Text style={styles.sectionHeadingText} accessibilityRole="header">
-          {props.title}
-        </Text>
+        <View style={styles.sectionTitleRow}>
+          <Text style={styles.sectionHeadingText} accessibilityRole="header">
+            {props.title}
+          </Text>
+          {props.waiting ? <Pill label={String(props.waiting)} tone="waiting" /> : null}
+        </View>
         {props.action ? (
           <Pressable
             onPress={props.action.onPress}
@@ -47,6 +56,8 @@ export function ListRow(props: {
   title: string;
   detail?: string;
   icon?: IconName;
+  /** A larger picture at the start of the row, in place of an icon. */
+  leading?: ReactNode;
   right?: ReactNode;
   first?: boolean;
   onPress?: () => void;
@@ -54,6 +65,7 @@ export function ListRow(props: {
 }) {
   const content = (
     <>
+      {props.leading}
       {props.icon ? <Icon name={props.icon} size={20} color={props.danger ? colors.owes : colors.muted} /> : null}
       <View style={styles.rowText}>
         <Text style={[styles.listTitle, props.danger && styles.listTitleDanger]}>{props.title}</Text>
@@ -79,15 +91,21 @@ export function ListRow(props: {
 
 type Tone = 'ok' | 'waiting' | 'problem' | 'neutral';
 
-const TONES: Record<Tone, { background: string; color: string }> = {
-  ok: { background: colors.owedSoft, color: colors.owed },
-  waiting: { background: colors.waitingSoft, color: colors.waiting },
-  problem: { background: colors.owesSoft, color: colors.owes },
-  neutral: { background: colors.tint, color: colors.muted },
-};
+function toneColors(tone: Tone): { background: string; color: string } {
+  switch (tone) {
+    case 'ok':
+      return { background: colors.owedSoft, color: colors.owed };
+    case 'waiting':
+      return { background: colors.waitingSoft, color: colors.waiting };
+    case 'problem':
+      return { background: colors.owesSoft, color: colors.owes };
+    case 'neutral':
+      return { background: colors.tint, color: colors.muted };
+  }
+}
 
 export function Pill({ label, tone }: { label: string; tone: Tone }) {
-  const { background, color } = TONES[tone];
+  const { background, color } = toneColors(tone);
   return (
     <View style={[styles.pill, { backgroundColor: background }]}>
       <Text style={[styles.pillText, { color }]}>{label}</Text>
@@ -118,8 +136,8 @@ export function Button(props: {
         pressed && styles.pressed,
       ]}
     >
-      {props.icon ? <Icon name={props.icon} size={18} /> : null}
-      <Text style={[styles.buttonText, props.compact && styles.buttonTextCompact]}>{props.label}</Text>
+      {props.icon ? <Icon name={props.icon} size={18} color={primary ? colors.primaryText : colors.text} /> : null}
+      <Text style={[styles.buttonText, !primary && styles.buttonTextSecondary, props.compact && styles.buttonTextCompact]}>{props.label}</Text>
     </Pressable>
   );
 }
@@ -160,10 +178,10 @@ export function Note({ children }: { children: ReactNode }) {
   );
 }
 
-export function Avatar({ initials, dark }: { initials: string; dark?: boolean }) {
+export function Avatar({ initials, green }: { initials: string; green?: boolean }) {
   return (
-    <View style={[styles.avatar, dark && styles.avatarDark]}>
-      <Text style={[styles.avatarText, dark && styles.avatarTextDark]}>{initials}</Text>
+    <View style={[styles.avatar, green && styles.avatarGreen]}>
+      <Text style={[styles.avatarText, green && styles.avatarTextGreen]}>{initials}</Text>
     </View>
   );
 }
@@ -200,7 +218,7 @@ export function LoadError({ message, onRetry }: { message: string; onRetry: () =
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   card: {
     backgroundColor: colors.surface,
     borderRadius: radius.card,
@@ -211,6 +229,7 @@ const styles = StyleSheet.create({
   sectionTitle: { ...type.heading, color: colors.text, marginTop: space(6), marginBottom: space(2) },
   section: { marginTop: space(6) },
   sectionHeading: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: space(2) },
+  sectionTitleRow: { flexDirection: 'row', alignItems: 'center', gap: space(2) },
   sectionHeadingText: { ...type.heading, color: colors.text },
   sectionAction: { flexDirection: 'row', alignItems: 'center', gap: space(1) },
   sectionActionText: { ...type.body, fontWeight: '600', color: colors.text },
@@ -229,6 +248,7 @@ const styles = StyleSheet.create({
   buttonDisabled: { opacity: 0.4 },
   pressed: { opacity: 0.6 },
   buttonText: { ...type.heading, color: colors.primaryText },
+  buttonTextSecondary: { color: colors.text },
   buttonTextCompact: { fontSize: 14, lineHeight: 20 },
   bottom: {
     paddingHorizontal: space(4),
@@ -261,12 +281,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  avatarDark: { backgroundColor: colors.dark },
+  avatarGreen: { backgroundColor: colors.primary },
   avatarText: { fontSize: 15, fontWeight: '700', color: colors.text },
-  avatarTextDark: { color: colors.onDark },
+  avatarTextGreen: { color: colors.primaryText },
   empty: { alignItems: 'stretch', paddingVertical: space(5) },
   emptyDetail: { ...type.small, color: colors.muted, marginTop: space(1) },
   emptyAction: { marginTop: space(4) },
   centre: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: space(6) },
   problem: { gap: space(3), marginTop: space(4), alignItems: 'flex-start' },
-});
+}));

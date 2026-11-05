@@ -9,7 +9,7 @@ import { BottomActions, Button } from '@/components/ui';
 import { kwacha } from '@/lib/arrangements';
 import { useAuth } from '@/lib/auth';
 import { reasonFor, sendCommand } from '@/lib/commands';
-import { colors, space } from '@/lib/theme';
+import { colors, space, themedStyles } from '@/lib/theme';
 
 function amountFrom(text: string): number | null {
   try {
@@ -106,10 +106,10 @@ export default function CorrectEntry() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   flex: { flex: 1 },
   content: { padding: space(4), paddingBottom: space(8) },
   original: { fontSize: 20, fontWeight: '800', color: colors.text },
   intro: { fontSize: 15, lineHeight: 22, color: colors.muted, marginTop: space(2), marginBottom: space(5) },
   error: { fontSize: 14, lineHeight: 20, color: colors.owes },
-});
+}));

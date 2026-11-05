@@ -57,6 +57,15 @@ const takings = (tripDayId: string, amount: number) => ({
   receiver: { kind: 'driver', userId: null },
 });
 
+async function logFuel(tripDayId: string, amount: number) {
+  const expenseId = randomUUID();
+  await ok(driver, 'log_expense', {
+    expenseId, tripDayId, vehicleId, category: 'fuel', amount, litres: 10,
+    paidBy: 'driver_cash', note: '', receiptPath: null, borneByOverride: null,
+  });
+  return expenseId;
+}
+
 async function workDay(date: string, gross: number, fuel = 0) {
   const tripDayId = randomUUID();
   await ok(driver, 'start_day', { tripDayId, vehicleId, serviceDate: date, odometerStart: 10_000 });
@@ -64,10 +73,8 @@ async function workDay(date: string, gross: number, fuel = 0) {
   await ok(driver, 'record_handover', entry);
   await ok(owner, 'decide_handover', { entryId: entry.entryId, decision: 'confirm', reason: null });
   if (fuel > 0) {
-    await ok(driver, 'log_expense', {
-      expenseId: randomUUID(), tripDayId, vehicleId, category: 'fuel', amount: fuel, litres: 10,
-      paidBy: 'driver_cash', note: '', receiptPath: null, borneByOverride: null,
-    });
+    const expenseId = await logFuel(tripDayId, fuel);
+    await ok(owner, 'decide_expense', { expenseId, accept: true, reason: null });
   }
   await ok(driver, 'end_day', { tripDayId, odometerEnd: 10_150 });
   return { tripDayId, entryId: entry.entryId };
@@ -116,6 +123,202 @@ describe('Version 0 money flow through the Command API', () => {
     const view = await viewSettlement(database, driver, second.tripDayId);
     expect(view.statement.arrearsBroughtForward).toBe(5_000);
     expect(view.statement.netBalance).toBe(55_000);
+  });
+
+  describe('reporting a bad day', () => {
+    const report = (over: Record<string, unknown> = {}) => ({
+      reportId: randomUUID(), vehicleId, serviceDate: '2026-11-02', kind: 'breakdown', reason: 'Gearbox failed at noon', ...over,
+    });
+
+    /** Target K500: a day that took K300, of which K200 reached the owner. */
+    async function shortDay() {
+      const tripDayId = randomUUID();
+      await ok(driver, 'start_day', { tripDayId, vehicleId, serviceDate: '2026-11-02', odometerStart: 1 });
+      const takingsEntry = takings(tripDayId, 30_000);
+      const handed = {
+        ...takings(tripDayId, 20_000), kind: 'remittance', giver: { kind: 'driver', userId: null }, receiver: { kind: 'owner', userId: null },
+      };
+      await ok(driver, 'record_handover', takingsEntry);
+      await ok(driver, 'record_handover', handed);
+      await ok(owner, 'decide_handover', { entryId: takingsEntry.entryId, decision: 'confirm', reason: null });
+      await ok(owner, 'decide_handover', { entryId: handed.entryId, decision: 'confirm', reason: null });
+      await ok(driver, 'end_day', { tripDayId, odometerEnd: 2 });
+      return tripDayId;
+    }
+
+    it('changes nothing until accepted, then nothing more is owed and what was handed over stands', async () => {
+      const tripDayId = await shortDay();
+      const before = await viewSettlement(database, owner, tripDayId);
+      expect(before.statement.owedForDay).toBe(30_000);
+
+      const payload = report();
+      await ok(driver, 'report_day', payload);
+      const waiting = await viewSettlement(database, owner, tripDayId);
+      expect(waiting.statement.owedForDay).toBe(30_000);
+      expect(waiting.statement.provisional).toBe(true);
+
+      await ok(owner, 'decide_report', { reportId: payload.reportId, accept: true, reason: null });
+      const { statement, position } = await viewSettlement(database, driver, tripDayId);
+      expect(statement.excused).toBe(true);
+      expect(statement.owedForDay).toBe(0);
+      expect(statement.ownerShare).toBe(20_000);
+      expect(statement.driverShare).toBe(10_000);
+      expect(statement.provisional).toBe(false);
+      expect(position.state).toBe('nothing_owed');
+    });
+
+    it('carries nothing forward from an excused day, but still carries a rejected one', async () => {
+      const tripDayId = await shortDay();
+      const rejected = report();
+      await ok(driver, 'report_day', rejected);
+      await ok(owner, 'decide_report', { reportId: rejected.reportId, accept: false, reason: 'No evidence' });
+      const next = await workDay('2026-11-03', 50_000);
+      expect((await viewSettlement(database, owner, next.tripDayId)).statement.arrearsBroughtForward).toBe(30_000);
+
+      const again = report({ reason: 'Here is the mechanic' });
+      await ok(driver, 'report_day', again);
+      await ok(owner, 'decide_report', { reportId: again.reportId, accept: true, reason: null });
+      expect((await viewSettlement(database, owner, next.tripDayId)).statement.arrearsBroughtForward).toBe(0);
+      expect((await viewSettlement(database, owner, tripDayId)).statement.owedForDay).toBe(0);
+    });
+
+    it('records a sick day with no work at all, which owes nothing', async () => {
+      const payload = report({ kind: 'sick', reason: 'Malaria' });
+      await ok(driver, 'report_day', payload);
+      await ok(owner, 'decide_report', { reportId: payload.reportId, accept: true, reason: null });
+      const row = await pg.query('select status from day_reports_v where id = $1', [payload.reportId]);
+      expect(row.rows[0]).toMatchObject({ status: 'accepted' });
+      const next = await workDay('2026-11-03', 50_000);
+      expect((await viewSettlement(database, owner, next.tripDayId)).statement.arrearsBroughtForward).toBe(0);
+    });
+
+    it('refuses what the rules forbid', async () => {
+      const byOwner = await run(owner, 'report_day', report());
+      expect(byOwner).toMatchObject({ ok: false, code: 'report.only_driver_reports' });
+      const future = await run(driver, 'report_day', report({ serviceDate: '2026-12-25' }));
+      expect(future).toMatchObject({ ok: false, code: 'report.date_in_future' });
+
+      const payload = report();
+      await ok(driver, 'report_day', payload);
+      const twice = await run(driver, 'report_day', report());
+      expect(twice).toMatchObject({ ok: false, code: 'report.already_reported' });
+
+      const byDriver = await run(driver, 'decide_report', { reportId: payload.reportId, accept: true, reason: null });
+      expect(byDriver).toMatchObject({ ok: false, code: 'access.owner_only' });
+      const noReason = await run(owner, 'decide_report', { reportId: payload.reportId, accept: false, reason: '' });
+      expect(noReason).toMatchObject({ ok: false, code: 'report.reason_required' });
+
+      await ok(owner, 'decide_report', { reportId: payload.reportId, accept: true, reason: null });
+      const decidedTwice = await run(owner, 'decide_report', { reportId: payload.reportId, accept: false, reason: 'Changed my mind' });
+      expect(decidedTwice).toMatchObject({ ok: false, code: 'report.already_decided' });
+    });
+  });
+
+  it('takes approved costs off the cashing: K500 target, K80 fuel, K800 taken', async () => {
+    const tripDayId = randomUUID();
+    await ok(driver, 'start_day', { tripDayId, vehicleId, serviceDate: '2026-11-02', odometerStart: 1 });
+    const entry = takings(tripDayId, 80_000);
+    await ok(driver, 'record_handover', entry);
+    await ok(owner, 'decide_handover', { entryId: entry.entryId, decision: 'confirm', reason: null });
+    const expenseId = await logFuel(tripDayId, 8_000);
+    await ok(owner, 'decide_expense', { expenseId, accept: true, reason: null });
+    const { statement } = await viewSettlement(database, owner, tripDayId);
+    expect(statement.ownerShare).toBe(42_000);
+    expect(statement.driverShare).toBe(30_000);
+    expect(statement.amountOwed).toBe(42_000);
+  });
+
+  describe('the owner answering a cost', () => {
+    async function dayWithCost() {
+      const { tripDayId } = await workDay('2026-11-02', 80_000);
+      return { tripDayId, expenseId: await logFuel(tripDayId, 20_000) };
+    }
+
+    it('does not count a cost until it is approved, and keeps the day not final', async () => {
+      const { tripDayId, expenseId } = await dayWithCost();
+      const waiting = await viewSettlement(database, owner, tripDayId);
+      expect(waiting.statement.expensesBorneByOwner).toBe(0);
+      expect(waiting.statement.provisional).toBe(true);
+      expect(waiting.statement.pendingExpenseIds).toEqual([expenseId]);
+
+      await ok(owner, 'decide_expense', { expenseId, accept: true, reason: null });
+      const approved = await viewSettlement(database, driver, tripDayId);
+      expect(approved.statement.expensesBorneByOwner).toBe(20_000);
+      expect(approved.statement.provisional).toBe(false);
+    });
+
+    it('leaves a rejected cost out, and needs a reason', async () => {
+      const { tripDayId, expenseId } = await dayWithCost();
+      const noReason = await run(owner, 'decide_expense', { expenseId, accept: false, reason: ' ' });
+      expect(noReason).toMatchObject({ ok: false, code: 'expense.decline_reason_required' });
+
+      await ok(owner, 'decide_expense', { expenseId, accept: false, reason: 'No receipt and too high' });
+      const { statement } = await viewSettlement(database, owner, tripDayId);
+      expect(statement.expensesBorneByOwner).toBe(0);
+      expect(statement.provisional).toBe(false);
+    });
+
+    it('can only be answered by the owner, and only once', async () => {
+      const { expenseId } = await dayWithCost();
+      const byDriver = await run(driver, 'decide_expense', { expenseId, accept: true, reason: null });
+      expect(byDriver).toMatchObject({ ok: false, code: 'access.owner_only' });
+
+      await ok(owner, 'decide_expense', { expenseId, accept: true, reason: null });
+      const twice = await run(owner, 'decide_expense', { expenseId, accept: false, reason: 'Changed my mind' });
+      expect(twice).toMatchObject({ ok: false, code: 'expense.already_decided' });
+    });
+  });
+
+  describe('one driver per bus', () => {
+    async function secondDriverOffer() {
+      const second = await createUser(pg, '+260960000002');
+      const { code } = await ok(owner, 'create_invite', { role: 'driver' });
+      await ok(second, 'join_business', { code }, null);
+      const arrangementId = randomUUID();
+      await ok(owner, 'propose_arrangement', {
+        arrangementId, vehicleId, driverId: second, type: 'fixed_target', terms: { dailyTarget: 40_000 },
+        fuelBearer: 'driver', otherCostsBearer: 'driver', fuelFloat: null, effectiveFrom: '2026-11-01',
+      });
+      return { second, arrangementId };
+    }
+
+    it('takes the bus off the old driver when a new one accepts', async () => {
+      const { second, arrangementId } = await secondDriverOffer();
+      await ok(second, 'respond_arrangement', { arrangementId, accept: true, reason: null });
+
+      const old = await run(driver, 'start_day', { tripDayId: randomUUID(), vehicleId, serviceDate: '2026-11-02', odometerStart: 1 });
+      expect(old).toMatchObject({ ok: false, code: 'day.no_active_arrangement' });
+      await ok(second, 'start_day', { tripDayId: randomUUID(), vehicleId, serviceDate: '2026-11-02', odometerStart: 1 });
+
+      const active = await pg.query(`select 1 from arrangements where vehicle_id = $1 and status = 'active'`, [vehicleId]);
+      expect(active.rows).toHaveLength(1);
+    });
+
+    it('leaves the old driver in place until the new one accepts, and if they decline', async () => {
+      const { second, arrangementId } = await secondDriverOffer();
+      await ok(driver, 'start_day', { tripDayId: randomUUID(), vehicleId, serviceDate: '2026-11-02', odometerStart: 1 });
+      const refused = await run(second, 'respond_arrangement', { arrangementId, accept: true, reason: null });
+      expect(refused).toMatchObject({ ok: false, code: 'arrangement.bus_in_use' });
+
+      await ok(second, 'respond_arrangement', { arrangementId, accept: false, reason: 'No thanks' });
+      const active = await pg.query<{ driver_id: string }>(
+        `select driver_id from arrangements where vehicle_id = $1 and status = 'active'`,
+        [vehicleId],
+      );
+      expect(active.rows.map((r) => r.driver_id)).toEqual([driver]);
+    });
+
+    it('closes other offers on the bus when one is accepted', async () => {
+      const { second, arrangementId } = await secondDriverOffer();
+      const otherOffer = randomUUID();
+      await ok(owner, 'propose_arrangement', {
+        arrangementId: otherOffer, vehicleId, driverId: driver, type: 'fixed_target', terms: { dailyTarget: 45_000 },
+        fuelBearer: 'driver', otherCostsBearer: 'driver', fuelFloat: null, effectiveFrom: '2026-11-01',
+      });
+      await ok(second, 'respond_arrangement', { arrangementId, accept: true, reason: null });
+      const late = await run(driver, 'respond_arrangement', { arrangementId: otherOffer, accept: true, reason: null });
+      expect(late).toMatchObject({ ok: false, code: 'arrangement.already_decided' });
+    });
   });
 
   describe('undoing a confirmed payment', () => {

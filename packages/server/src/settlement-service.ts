@@ -31,9 +31,15 @@ export async function computeStatement(db: Db, day: TripDay): Promise<Settlement
   const s = day.snapshot;
   const { arrangement } = await loadArrangement(db, s.arrangementId);
   const targetApplies = new VehicleStatusPolicy(await statusHistory(db, s.vehicleId)).targetApplies(s.serviceDate);
+  const reports = await db.query<{ status: string }>(
+    'select status from day_reports_v where driver_id = $1 and service_date = $2',
+    [s.driverId, s.serviceDate],
+  );
   return calculateSettlement(day, arrangement, {
     targetApplies,
     arrearsBroughtForward: await arrearsBefore(db, day),
+    excused: reports.rows.some((r) => r.status === 'accepted'),
+    reportPending: reports.rows.some((r) => r.status === 'pending'),
   });
 }
 

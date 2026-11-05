@@ -22,7 +22,9 @@ export interface SettlementStatement {
   netBalance: Ngwee;
   whoOwesWhom: WhoOwesWhom;
   amountOwed: Ngwee;
-  /** True while the day is open, an entry is unconfirmed or an expense is pending. */
+  /** True when the Owner accepted a report for this day: nothing more is owed for it. */
+  excused: boolean;
+  /** True while the day is open, an entry is unconfirmed, or a cost or report is waiting. */
   provisional: boolean;
   unconfirmedIncomeIds: string[];
   pendingExpenseIds: string[];
@@ -32,6 +34,10 @@ export interface SettlementOptions {
   targetApplies: boolean;
   /** Positive: the Driver owes the Owner from earlier days. */
   arrearsBroughtForward: Ngwee;
+  /** The Owner accepted a report for this day, such as a breakdown or sickness. */
+  excused?: boolean;
+  /** A report for this day is waiting for the Owner's answer. */
+  reportPending?: boolean;
 }
 
 /**
@@ -42,6 +48,9 @@ export interface SettlementOptions {
  * The Owner should end the day holding ownerShare. The Owner already holds
  * whatever was handed over to them, less whatever they paid for, so the
  * difference is what the Driver still owes (or is owed).
+ *
+ * On an excused day whatever the Driver handed over stands, in either direction:
+ * the Owner's share becomes what the Owner already has, so the day leaves nothing owed.
  */
 export function calculateSettlement(
   day: TripDay,
@@ -51,18 +60,21 @@ export function calculateSettlement(
   const grossIncome = day.confirmedIncome();
   const expensesBorneByOwner = day.approvedExpensesBorneBy('owner');
   const expensesBorneByDriver = day.approvedExpensesBorneBy('driver');
-  const { ownerShare, driverShare } = arrangement.split({
+  const split = arrangement.split({
     grossIncome,
     ownerBorneExpenses: expensesBorneByOwner,
     driverBorneExpenses: expensesBorneByDriver,
     targetApplies: options.targetApplies,
   });
+  const ownerNetCash = day.confirmedReceivedByOwner() - day.approvedExpensesFundedByOwner();
+  const excused = options.excused ?? false;
+  const ownerShare = excused ? ownerNetCash : split.ownerShare;
+  const driverShare = excused ? grossIncome - expensesBorneByOwner - expensesBorneByDriver - ownerNetCash : split.driverShare;
   invariant(
     ownerShare + driverShare === grossIncome - expensesBorneByOwner - expensesBorneByDriver,
     'settlement.split_does_not_balance',
   );
 
-  const ownerNetCash = day.confirmedReceivedByOwner() - day.approvedExpensesFundedByOwner();
   const owedForDay = ownerShare - ownerNetCash;
   const netBalance = owedForDay + options.arrearsBroughtForward;
   const unconfirmedIncomeIds = day.unconfirmedIncome().map((e) => e.id);
@@ -81,7 +93,9 @@ export function calculateSettlement(
     arrearsBroughtForward: options.arrearsBroughtForward,
     netBalance,
     ...direction(netBalance),
-    provisional: day.status === 'open' || unconfirmedIncomeIds.length > 0 || pendingExpenseIds.length > 0,
+    excused,
+    provisional:
+      day.status === 'open' || unconfirmedIncomeIds.length > 0 || pendingExpenseIds.length > 0 || (options.reportPending ?? false),
     unconfirmedIncomeIds,
     pendingExpenseIds,
   };

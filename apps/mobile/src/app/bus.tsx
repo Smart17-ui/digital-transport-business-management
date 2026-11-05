@@ -1,14 +1,15 @@
 import { currentDayForVehicle, lastFinishedDayForVehicle, summariseDay } from '@dt/domain';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
+import { useCallback } from 'react';
 import { RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { DayActivity } from '@/components/day-activity';
-import { DayStatusPill, dayDetail } from '@/components/home-parts';
+import { DayStatusPill, dayDetail, daySentNote, km } from '@/components/home-parts';
 import { Text } from '@/components/text';
 import { Button, Card, EmptyState, ListRow, LoadError, MoneyRow, Pill, ScreenLoading, Section } from '@/components/ui';
 import { describeCosts, describeTerms, formatDay, kwacha, localDate, type ArrangementRecord } from '@/lib/arrangements';
 import { useAuth } from '@/lib/auth';
-import { busTypeLabel, useOwnerOverview } from '@/lib/business';
-import { colors, space, type } from '@/lib/theme';
+import { fetchBusRecord, useOwnerOverview, useScreenData, vehicleTypeLabel } from '@/lib/business';
+import { colors, space, themedStyles, type } from '@/lib/theme';
 
 function StatusPill({ status }: { status: ArrangementRecord['status'] }) {
   if (status === 'active') return <Pill label="Agreed" tone="ok" />;
@@ -19,7 +20,10 @@ function StatusPill({ status }: { status: ArrangementRecord['status'] }) {
 export default function BusDetail() {
   const { bus: busId } = useLocalSearchParams<{ bus: string }>();
   const { account } = useAuth();
-  const { data: overview, failed, refreshing, reload } = useOwnerOverview(account?.business?.id ?? '');
+  const businessId = account?.business?.id ?? '';
+  const { data: overview, failed, refreshing, reload } = useOwnerOverview(businessId);
+  const loadRecord = useCallback(() => fetchBusRecord(businessId, busId), [businessId, busId]);
+  const { data: record } = useScreenData(loadRecord);
 
   const bus = overview?.buses.find((b) => b.id === busId);
   const title = <Stack.Screen options={{ title: bus?.plate ?? 'Bus' }} />;
@@ -56,8 +60,6 @@ export default function BusDetail() {
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={reload} />}
     >
       {title}
-      <Text style={styles.type}>{busTypeLabel(bus.type)}</Text>
-
       <Section title="Today">
         {day && summary ? (
           <Card style={styles.dayCard}>
@@ -65,6 +67,7 @@ export default function BusDetail() {
               <Text style={styles.detail}>{dayDetail(day)}</Text>
               <DayStatusPill day={day} />
             </View>
+            {daySentNote(day) ? <Text style={styles.detail}>{daySentNote(day)}</Text> : null}
             <MoneyRow label="Takings" value={withWaiting(summary.takings, summary.takingsWaiting)} />
             <MoneyRow label="Costs from the cash" value={kwacha(summary.costsFromCash)} />
             <MoneyRow label="Handed to you" value={withWaiting(summary.handedOver, summary.handedOverWaiting)} last />
@@ -79,7 +82,7 @@ export default function BusDetail() {
           <Card style={styles.settlement}>
             <ListRow
               first
-              title={day ? 'See settlement' : 'Last settlement'}
+              title={day ? 'See cashing' : 'Last cashing'}
               detail={formatDay(settlementDay.serviceDate)}
               onPress={() =>
                 router.push({ pathname: '/day-settlement', params: { day: settlementDay.id, plate: bus.plate } })
@@ -125,14 +128,30 @@ export default function BusDetail() {
           </>
         )}
       </Section>
+
+      <Section title="About this bus">
+        <Card style={styles.rows}>
+          <MoneyRow label="Number plate" value={bus.plate} />
+          <MoneyRow label="Type" value={vehicleTypeLabel(bus.type)} />
+          <MoneyRow label="Added" value={formatDay(bus.addedAt.slice(0, 10))} last={!record} />
+          {record ? (
+            <>
+              <MoneyRow label="Days finished" value={String(record.daysWorked)} />
+              <MoneyRow label="Last worked" value={record.lastWorked ? formatDay(record.lastWorked) : 'Not yet'} />
+              <MoneyRow label="Distance driven" value={km(record.distance)} />
+              <MoneyRow label="Last odometer reading" value={record.lastOdometer === null ? 'None yet' : km(record.lastOdometer)} last />
+            </>
+          ) : null}
+        </Card>
+      </Section>
     </ScrollView>
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   flex: { flex: 1 },
   content: { padding: space(4), paddingBottom: space(8) },
-  type: { ...type.body, color: colors.muted },
+  rows: { paddingVertical: space(1) },
   dayCard: { paddingVertical: space(3) },
   dayHeading: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: space(2), marginBottom: space(1) },
   detail: { flexShrink: 1, ...type.small, color: colors.muted, marginTop: 2 },
@@ -140,4 +159,4 @@ const styles = StyleSheet.create({
   agreement: { marginBottom: space(2.5) },
   driver: { flexShrink: 1, ...type.heading, color: colors.text },
   assign: { marginTop: space(1) },
-});
+}));
