@@ -12,7 +12,8 @@ function press(current: string, key: (typeof KEYS)[number]): string {
   if (key === '.') return current.includes('.') ? current : `${current || '0'}.`;
   const [whole = '', fraction] = current.split('.');
   if (fraction !== undefined) return fraction.length < 2 ? current + key : current;
-  if (whole.length >= 7) return current;
+  // Six figures stays under the K1,000,000 the server accepts.
+  if (whole.length >= 6) return current;
   return current === '0' ? key : current + key;
 }
 

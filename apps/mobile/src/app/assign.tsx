@@ -1,4 +1,4 @@
-import type { ArrangementType, Bearer } from '@dt/domain';
+import { dailyTermWarning, type ArrangementType, type Bearer } from '@dt/domain';
 import { randomUUID } from 'expo-crypto';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useRef, useState } from 'react';
@@ -17,6 +17,7 @@ import {
 import { useAuth } from '@/lib/auth';
 import { useOwnerOverview } from '@/lib/business';
 import { reasonFor, sendCommand } from '@/lib/commands';
+import { confirmNumber } from '@/lib/confirm-number';
 import { colors, space, themedStyles } from '@/lib/theme';
 
 export default function Assign() {
@@ -166,7 +167,9 @@ export default function Assign() {
       </ScrollView>
 
       <BottomActions>
-        <Button label={saving ? 'Sending...' : 'Send to driver'} disabled={!ready || saving} onPress={send} />
+        <Button label={saving ? 'Sending...' : 'Send to driver'} disabled={!ready || saving} onPress={() =>
+            confirmNumber(dailyTermWarning(terms?.dailyTarget ?? terms?.dailyPay ?? terms?.dailyPayment ?? 0), () => void send())
+          } />
       </BottomActions>
     </KeyboardAvoidingView>
   );

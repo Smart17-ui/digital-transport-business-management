@@ -13,6 +13,7 @@ export const en: Record<EventType, Message> = {
   ArrangementEnded: { title: 'Bus reassigned', body: 'You are no longer assigned to this bus. Open the app for details.' },
   DayStarted: { title: 'Day started', body: 'A driver has started the day.' },
   DayClosed: { title: 'Day closed', body: 'A day has ended. Open the app to see the cashing.' },
+  DayReopened: { title: 'Day reopened', body: 'Your owner reopened a day. Open the app to see why, then end it again.' },
   DayReported: { title: 'Problem reported', body: 'A driver reported a problem with a day. Open the app to answer.' },
   DayReportAccepted: { title: 'Report accepted', body: 'Your report was accepted. Nothing more is owed for that day.' },
   DayReportRejected: { title: 'Report rejected', body: 'Your report was rejected. Open the app to see why.' },

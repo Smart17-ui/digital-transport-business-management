@@ -1,4 +1,5 @@
 import type { Bearer } from '../arrangement/index.ts';
+import { assertAmountWithinLimit } from '../entry-checks.ts';
 import { invariant } from '../errors.ts';
 import { ngwee, type Ngwee } from '../money.ts';
 import { ApprovedState, type Expense } from './expense.ts';
@@ -30,6 +31,7 @@ export function correctIncome(
 ): Correction<IncomeEntry> {
   // A disputed entry can be corrected too: that is how a dispute is resolved. Its
   // reversal cancels nothing, because a disputed entry was never counted (TripDay).
+  assertAmountWithinLimit(request.amount);
   assertCorrectable(original.status !== 'pending', original.reversesId, alreadyCorrected, request);
   const base = {
     ...original,
@@ -52,6 +54,7 @@ export function correctExpense(
   request: CorrectionRequest & { borneBy: Bearer },
   alreadyCorrected: boolean,
 ): Correction<Expense> {
+  assertAmountWithinLimit(request.amount);
   assertCorrectable(original.state.status !== 'pending', original.reversesId, alreadyCorrected, request);
   const counted = original.state.approvedAmount ?? 0;
   const base = { ...original, recordedBy: request.actorId, late: false, note: request.reason.trim() };

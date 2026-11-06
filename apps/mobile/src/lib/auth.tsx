@@ -4,6 +4,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { CONSENT_SCOPE, NOTICE_VERSION } from '@/lib/consent';
 import { secureStorage } from '@/lib/secure-storage';
 import { supabase } from '@/lib/supabase';
+import { stopTracking } from '@/lib/tracking';
 
 export interface Account {
   displayName: string | null;
@@ -94,6 +95,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Fires straight away with the saved session, then on every sign-in and sign-out.
     const { data } = supabase.auth.onAuthStateChange((event, next) => {
       if (event === 'SIGNED_OUT' && !signingOut.current) setSessionEnded(true);
+      // However the session ended, a signed-out phone must not keep sending its location.
+      if (event === 'SIGNED_OUT') void stopTracking();
       if (event === 'SIGNED_IN') setSessionEnded(false);
       setSession(next);
     });

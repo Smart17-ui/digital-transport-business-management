@@ -1,3 +1,4 @@
+import { handoverWarning, takingsWarning } from '@dt/domain';
 import { randomUUID } from 'expo-crypto';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useRef, useState } from 'react';
@@ -7,11 +8,12 @@ import { Text } from '@/components/text';
 import { BottomActions, Button } from '@/components/ui';
 import { kwacha } from '@/lib/arrangements';
 import { useAuth } from '@/lib/auth';
+import { confirmNumber } from '@/lib/confirm-number';
 import { enqueue } from '@/lib/queue';
 import { colors, space, themedStyles } from '@/lib/theme';
 
 export default function RecordCash() {
-  const params = useLocalSearchParams<{ day: string; kind: string }>();
+  const params = useLocalSearchParams<{ day: string; kind: string; cash?: string }>();
   const takings = params.kind === 'takings';
   const { userId, account } = useAuth();
   const [typed, setTyped] = useState('');
@@ -60,7 +62,9 @@ export default function RecordCash() {
         <Button
           disabled={amount <= 0 || saving}
           label={saving ? 'Saving...' : amount > 0 ? `Record ${kwacha(amount)}` : 'Enter an amount'}
-          onPress={save}
+          onPress={() =>
+            confirmNumber(takings ? takingsWarning(amount) : handoverWarning(amount, params.cash ? Number(params.cash) : null), () => void save())
+          }
         />
       </BottomActions>
     </View>

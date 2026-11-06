@@ -122,8 +122,11 @@ function Routes() {
         <Stack.Screen name="day-settlement" />
         <Stack.Screen name="history" />
         <Stack.Screen name="driver" />
+        <Stack.Screen name="map" />
+        <Stack.Screen name="trip" />
         <Stack.Screen name="settings" />
         <Stack.Screen name="change-password" />
+        <Stack.Screen name="reopen-day" />
         <Stack.Screen name="pay" />
         <Stack.Screen name="correct-entry" />
       </Stack.Protected>

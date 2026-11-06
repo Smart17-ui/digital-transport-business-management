@@ -1,27 +1,39 @@
+import { startReadingWarning } from '@dt/domain';
 import { randomUUID } from 'expo-crypto';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useRef, useState } from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet } from 'react-native';
+import { KeyboardAvoidingView, Linking, Platform, ScrollView, StyleSheet } from 'react-native';
 import { TextField } from '@/components/form';
 import { Text } from '@/components/text';
-import { BottomActions, Button } from '@/components/ui';
+import { BottomActions, Button, Note } from '@/components/ui';
 import { localDate } from '@/lib/arrangements';
 import { useAuth } from '@/lib/auth';
+import { confirmNumber } from '@/lib/confirm-number';
 import { enqueue } from '@/lib/queue';
-import { colors, space, themedStyles } from '@/lib/theme';
+import { colors, space, themedStyles, type } from '@/lib/theme';
+import { LOCATION_PROBLEMS, turnOnLocation, type LocationProblem } from '@/lib/tracking';
 
 export default function StartDay() {
-  const { bus, plate } = useLocalSearchParams<{ bus: string; plate: string }>();
+  const { bus, plate, last } = useLocalSearchParams<{ bus: string; plate: string; last?: string }>();
   const { userId, account } = useAuth();
   const [reading, setReading] = useState('');
   const [saving, setSaving] = useState(false);
+  const [problem, setProblem] = useState<LocationProblem | null>(null);
   const newDay = useRef({ tripDayId: randomUUID(), clientId: randomUUID() });
 
   const save = async () => {
     const businessId = account?.business?.id;
     if (!userId || !businessId) return;
     setSaving(true);
+    setProblem(null);
     const { tripDayId, clientId } = newDay.current;
+    // First, because a day cannot start without location.
+    const refused = await turnOnLocation({ userId, businessId, tripDayId });
+    if (refused) {
+      setProblem(refused);
+      setSaving(false);
+      return;
+    }
     await enqueue(
       userId,
       'start_day',
@@ -45,9 +57,19 @@ export default function StartDay() {
           maxLength={7}
           keyboardType="number-pad"
         />
+        <Note>
+          Location must be on to start your day. Your owner can see where the bus is until you end the day, even when the app
+          is closed. Location turns off when you end the day.
+        </Note>
+        {problem ? (
+          <Text style={styles.error} accessibilityRole="alert">
+            {LOCATION_PROBLEMS[problem]}
+          </Text>
+        ) : null}
+        {problem === 'blocked' ? <Button compact variant="secondary" label="Open phone settings" onPress={() => void Linking.openSettings()} /> : null}
       </ScrollView>
       <BottomActions>
-        <Button label={saving ? 'Saving...' : 'Start day'} disabled={reading === '' || saving} onPress={save} />
+        <Button label={saving ? 'Starting...' : 'Turn on location and start day'} disabled={reading === '' || saving} onPress={() => confirmNumber(startReadingWarning(Number(reading), last ? Number(last) : null), () => void save())} />
       </BottomActions>
     </KeyboardAvoidingView>
   );
@@ -57,4 +79,5 @@ const styles = themedStyles(() => StyleSheet.create({
   flex: { flex: 1 },
   content: { padding: space(4), paddingBottom: space(8) },
   intro: { fontSize: 16, lineHeight: 23, color: colors.muted, marginBottom: space(5) },
+  error: { ...type.small, color: colors.owes, marginVertical: space(3) },
 }));

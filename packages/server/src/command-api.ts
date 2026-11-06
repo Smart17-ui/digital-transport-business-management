@@ -29,6 +29,7 @@ const handlers: { [T in CommandType]: Handler<T> } = {
   register_device: crew.registerDevice,
   start_day: ledger.startDay,
   end_day: ledger.endDay,
+  reopen_day: ledger.reopenDay,
   record_handover: ledger.recordHandover,
   decide_handover: ledger.decideHandover,
   log_expense: ledger.logExpense,

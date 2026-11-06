@@ -120,6 +120,8 @@ export default function DaySettlement() {
   const iOwe = isOwner ? remaining < 0 : remaining > 0;
   const iWasPaidBy = (payer: SettlementPayment['payer']) => (isOwner ? payer === 'driver' : payer === 'owner');
   const claimed = payments.find((p) => p.status === 'claimed');
+  // The server decides for certain, including whether a later day exists.
+  const canReopen = isOwner && closed && !older && !payments.some((p) => p.status === 'claimed' || p.status === 'confirmed');
   const iAnswerClaim = !!claimed && iWasPaidBy(claimed.payer);
   const canPay = closed && !older && iOwe && !claimed;
   const olderPill =
@@ -225,6 +227,11 @@ export default function DaySettlement() {
         {isOwner && daySentNote(data.times) ? <Note>{daySentNote(data.times)}</Note> : null}
         {statement.excused ? <Note>Report accepted: nothing more is owed for this day.</Note> : null}
         {!closed ? <Note>The day is still running, so this will change.</Note> : null}
+        {data.reopenings.map((r) => (
+          <Note key={r.reopenedAt}>
+            The owner reopened this day. It had ended at {r.previousOdometerEnd.toLocaleString('en-US')} km. Reason: {r.reason}
+          </Note>
+        ))}
         {older ? (
           <Note>
             Later payments are counted here.{' '}
@@ -377,6 +384,16 @@ export default function DaySettlement() {
             ) : null}
           </>
         ) : null}
+
+        {canReopen ? (
+          <View style={styles.reopen}>
+            <Button
+              variant="secondary"
+              label="Reopen this day"
+              onPress={() => router.push({ pathname: '/reopen-day', params: { day: params.day, odometer: String(tripDay.odometerEnd) } })}
+            />
+          </View>
+        ) : null}
       </ScrollView>
 
       {undoing ? (
@@ -448,6 +465,7 @@ function HeroStat({ label, value }: { label: string; value: string }) {
 
 const styles = themedStyles(() => StyleSheet.create({
   flex: { flex: 1 },
+  reopen: { marginTop: space(6) },
   centre: { flex: 1, justifyContent: 'center', gap: space(3), padding: space(6) },
   message: { fontSize: 15, lineHeight: 22, color: colors.text, textAlign: 'center' },
   content: { padding: space(4), paddingBottom: space(8) },

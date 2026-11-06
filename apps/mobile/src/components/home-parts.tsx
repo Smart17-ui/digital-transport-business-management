@@ -17,6 +17,11 @@ export function callPhone(phone: string): void {
   void Linking.openURL(`tel:+${phone}`);
 }
 
+/** Google Maps' directions to a place, where the driver can compare routes by live traffic. */
+export function openDirections(place: { latitude: number; longitude: number }): void {
+  void Linking.openURL(`https://www.google.com/maps/dir/?api=1&travelmode=driving&destination=${place.latitude},${place.longitude}`);
+}
+
 export function initialsOf(name: string): string {
   return name
     .split(/\s+/)

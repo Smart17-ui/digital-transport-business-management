@@ -56,7 +56,11 @@ export function share(amount: Ngwee, basisPoints: number): Ngwee {
   return Math.floor((amount * basisPoints) / 10_000);
 }
 
+/** K1,000,000: more than any one entry can really be, so it can only be a typing mistake. */
+export const MAX_AMOUNT_NGWEE = 100_000_000;
+
 export function assertPositive(amount: Ngwee, code = 'money.not_positive'): void {
   ngwee(amount);
   invariant(amount > 0, code, 'Amount must be greater than zero');
+  invariant(amount <= MAX_AMOUNT_NGWEE, 'amount.too_large', 'Amount is too large');
 }

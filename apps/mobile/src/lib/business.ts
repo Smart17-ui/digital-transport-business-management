@@ -103,7 +103,7 @@ export interface DaySettlement {
   statement: SettlementStatement;
   payments: SettlementPayment[];
   position: PaymentPosition;
-  tripDay: { businessId: string; driverId: string; serviceDate: string; endedAt: string | null };
+  tripDay: { businessId: string; driverId: string; serviceDate: string; odometerEnd: number | null; endedAt: string | null };
   entries: DayEntry[];
   costs: DayCost[];
   /** All this driver's finished days, with later payments applied to the oldest debt first. */
@@ -112,6 +112,8 @@ export interface DaySettlement {
   latestClosedId: string | null;
   /** Why a payment was refused or undone, by payment id. */
   paymentReasons: Record<string, string>;
+  /** Each time an owner reopened this day, oldest first. */
+  reopenings: { reason: string; previousOdometerEnd: number; reopenedAt: string }[];
   /** When the day started and ended: by the phone's clock, and when each reached the server. */
   times: { startedAt: string | null; endedAt: string | null; startSentAt: string | null; endSentAt: string | null };
 }
@@ -493,6 +495,48 @@ function allocationFor(days: readonly ClosedDayRow[], balances: Awaited<ReturnTy
   );
 }
 
+/** A bus's last known position, for the Owner's map. */
+export interface VehiclePosition {
+  vehicleId: string;
+  driverId: string;
+  latitude: number;
+  longitude: number;
+  speedKmh: number | null;
+  recordedAt: string;
+  receivedAt: string;
+}
+
+/** Everything the live map shows. Small enough to read again every half minute. */
+export async function fetchLiveMap(businessId: string) {
+  const [buses, drivers, positions, running] = await Promise.all([
+    fetchBuses(businessId),
+    fetchDrivers(businessId),
+    supabase
+      .from('vehicle_last_positions')
+      .select('vehicle_id, driver_id, latitude, longitude, speed_kmh, recorded_at, received_at')
+      .eq('business_id', businessId),
+    supabase.from('trip_days').select('vehicle_id').eq('business_id', businessId).is('ended_at', null),
+  ]);
+  if (positions.error) throw positions.error;
+  if (running.error) throw running.error;
+  return {
+    buses,
+    drivers,
+    runningVehicleIds: running.data.map((d) => d.vehicle_id as string),
+    positions: positions.data.map(
+      (p): VehiclePosition => ({
+        vehicleId: p.vehicle_id,
+        driverId: p.driver_id,
+        latitude: p.latitude,
+        longitude: p.longitude,
+        speedKmh: p.speed_kmh,
+        recordedAt: p.recorded_at,
+        receivedAt: p.received_at,
+      }),
+    ),
+  };
+}
+
 /** `days` must be oldest first, as fetchClosedDays gives them. */
 function workRecord(days: readonly ClosedDayRow[]): WorkRecord {
   const last = days[days.length - 1];
@@ -527,13 +571,15 @@ export async function fetchDaySettlement(tripDayId: string): Promise<DaySettleme
   if (view.error || !view.data) throw view.error ?? new Error('No settlement returned');
 
   const { businessId, driverId } = view.data.tripDay;
-  const [closedDays, balances, reasons, day] = await Promise.all([
+  const [closedDays, balances, reasons, day, reopenings] = await Promise.all([
     fetchClosedDays(businessId, driverId),
     fetchBalances(businessId, driverId),
     supabase.from('settlement_payments_v').select('id, decision_reason, reversal_reason').eq('trip_day_id', tripDayId),
     supabase.from('trip_days').select('started_at, ended_at, device_started_at, device_ended_at').eq('id', tripDayId).single(),
+    supabase.from('day_reopenings').select('reason, previous_odometer_end, reopened_at').eq('trip_day_id', tripDayId).order('reopened_at'),
   ]);
   if (reasons.error) throw reasons.error;
+  if (reopenings.error) throw reopenings.error;
   if (day.error) throw day.error;
   return {
     ...view.data,
@@ -547,6 +593,11 @@ export async function fetchDaySettlement(tripDayId: string): Promise<DaySettleme
         return reason ? [[p.id as string, reason as string]] : [];
       }),
     ),
+    reopenings: reopenings.data.map((r) => ({
+      reason: r.reason as string,
+      previousOdometerEnd: r.previous_odometer_end as number,
+      reopenedAt: r.reopened_at as string,
+    })),
     times: {
       startedAt: day.data.device_started_at ?? day.data.started_at,
       endedAt: day.data.device_ended_at ?? day.data.ended_at,

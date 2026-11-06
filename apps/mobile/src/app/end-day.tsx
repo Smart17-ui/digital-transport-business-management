@@ -1,3 +1,4 @@
+import { endReadingWarning } from '@dt/domain';
 import { randomUUID } from 'expo-crypto';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useRef, useState } from 'react';
@@ -6,8 +7,10 @@ import { TextField } from '@/components/form';
 import { Text } from '@/components/text';
 import { BottomActions, Button } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
+import { confirmNumber } from '@/lib/confirm-number';
 import { enqueue } from '@/lib/queue';
 import { colors, space, themedStyles } from '@/lib/theme';
+import { stopTracking } from '@/lib/tracking';
 
 export default function EndDay() {
   const params = useLocalSearchParams<{ day: string; plate: string; start: string }>();
@@ -26,6 +29,7 @@ export default function EndDay() {
     if (!userId || !businessId) return;
     setSaving(true);
     await enqueue(userId, 'end_day', businessId, { tripDayId: params.day, odometerEnd: end }, clientId.current);
+    await stopTracking();
     router.back();
   };
 
@@ -49,10 +53,13 @@ export default function EndDay() {
           </Text>
         ) : null}
         {ready ? <Text style={styles.distance}>You drove {(end - start).toLocaleString('en-US')} km.</Text> : null}
-        <Text style={styles.small}>Once you end the day, you cannot start it again or change these readings.</Text>
+        <Text style={styles.small}>
+          Once you end the day, only your owner can reopen it. Check the reading before you continue. Location turns off when you
+          end the day.
+        </Text>
       </ScrollView>
       <BottomActions>
-        <Button label={saving ? 'Saving...' : 'End day'} disabled={!ready || saving} onPress={save} />
+        <Button label={saving ? 'Saving...' : 'End day'} disabled={!ready || saving} onPress={() => confirmNumber(endReadingWarning(start, end), () => void save())} />
       </BottomActions>
     </KeyboardAvoidingView>
   );

@@ -60,6 +60,9 @@ export default function BusDetail() {
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={reload} />}
     >
       {title}
+      <Card style={styles.settlement}>
+        <ListRow first icon="map" title="See on the map" onPress={() => router.push({ pathname: '/map', params: { bus: bus.id } })} />
+      </Card>
       <Section title="Today">
         {day && summary ? (
           <Card style={styles.dayCard}>

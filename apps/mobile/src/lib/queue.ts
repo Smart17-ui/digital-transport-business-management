@@ -136,6 +136,7 @@ async function dismissRefused(clientId: string): Promise<void> {
  */
 export function useCommandQueue(userId: string, onSent: () => Promise<void>) {
   const [queued, setQueued] = useState<QueuedCommand[]>([]);
+  const [loaded, setLoaded] = useState(false);
   const latestOnSent = useRef(onSent);
   latestOnSent.current = onSent;
 
@@ -144,7 +145,10 @@ export function useCommandQueue(userId: string, onSent: () => Promise<void>) {
     const refresh = async (sent: boolean) => {
       if (sent) await latestOnSent.current();
       const next = await listQueued(userId);
-      if (mounted) setQueued(next);
+      if (mounted) {
+        setQueued(next);
+        setLoaded(true);
+      }
     };
 
     listeners.add(refresh);
@@ -163,6 +167,8 @@ export function useCommandQueue(userId: string, onSent: () => Promise<void>) {
   }, [userId]);
 
   return {
+    /** False until the phone's queue has been read, when `waiting` cannot be relied on yet. */
+    loaded,
     /** Everything still on the phone that the server has not accepted. */
     waiting: queued.filter((c) => c.refusedCode === null),
     refused: queued.filter((c) => c.refusedCode !== null),

@@ -67,7 +67,24 @@ export function OwnerHome({ business }: { business: Business }) {
             </View>
           ) : null}
 
-          {buses.length > 0 ? <QuickLinks /> : null}
+          {buses.length > 0 ? (
+            <>
+              <Card style={styles.mapLink}>
+                <ListRow
+                  first
+                  leading={
+                    <View style={styles.busIcon}>
+                      <Icon name="map" size={22} color={colors.owed} />
+                    </View>
+                  }
+                  title="Live map"
+                  detail="See where your buses are"
+                  onPress={() => router.push('/map')}
+                />
+              </Card>
+              <QuickLinks />
+            </>
+          ) : null}
 
           {needsYou > 0 ? (
             <Section title="Needs you" waiting={needsYou}>
@@ -239,6 +256,7 @@ const styles = themedStyles(() => StyleSheet.create({
   flex: { flex: 1 },
   content: { flexGrow: 1, paddingHorizontal: space(4) },
   list: { padding: 0, overflow: 'hidden' },
+  mapLink: { padding: 0, overflow: 'hidden', marginTop: space(4) },
   hero: { backgroundColor: colors.hero, borderRadius: radius.card, padding: space(5), marginTop: space(5) },
   heroTop: { flexDirection: 'row', justifyContent: 'space-between', gap: space(3) },
   heroLabel: { ...type.small, color: colors.onDarkMuted },

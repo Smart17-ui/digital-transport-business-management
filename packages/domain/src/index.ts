@@ -16,3 +16,6 @@ export * from './settlement/settlement.ts';
 export * from './settlement/estimate.ts';
 export * from './commands.ts';
 export * from './events.ts';
+export * from './entry-checks.ts';
+export * from './tracking.ts';
+export * from './navigation.ts';

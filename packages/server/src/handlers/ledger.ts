@@ -21,6 +21,7 @@ import {
   enabledPaymentMethods,
   loadArrangement,
   loadTripDay,
+  paymentsForDay,
   statusHistory,
   toExpense,
   toIncomeEntry,
@@ -92,6 +93,43 @@ export async function endDay(ctx: CommandContext, p: CommandPayload<'end_day'>) 
     link: `/days/${p.tripDayId}/settlement`,
   });
   return { tripDayId: p.tripDayId, distance, provisional: statement.provisional };
+}
+
+/**
+ * An Owner reopens a day ended by mistake. Only the newest day of that bus and
+ * driver, because later days' arrears were worked out from this one, and not once
+ * money has been paid against it. Nothing is deleted: what the day said is recorded,
+ * and the settlement gains a new version.
+ */
+export async function reopenDay(ctx: CommandContext, p: CommandPayload<'reopen_day'>) {
+  const { businessId } = requireOwner(ctx);
+  const day = await loadTripDay(ctx.db, p.tripDayId);
+  const s = day.snapshot;
+  invariant(s.businessId === businessId, 'day.not_found');
+  const previous = { odometerEnd: s.odometerEnd, endedAt: s.endedAt };
+  day.reopen(p.reason);
+
+  const newer = await maybeOne(
+    ctx.db,
+    `select 1 from trip_days
+     where id <> $1 and business_id = $2 and (vehicle_id = $3 or driver_id = $4)
+       and (ended_at is null or (service_date, started_at) > ($5::date, $6::timestamptz))`,
+    [s.id, businessId, s.vehicleId, s.driverId, s.serviceDate, s.startedAt],
+  );
+  invariant(newer === null, 'day.not_latest');
+  const payments = await paymentsForDay(ctx.db, s.id);
+  invariant(!payments.some((payment) => payment.status === 'claimed' || payment.status === 'confirmed'), 'day.has_payments');
+
+  await ctx.db.query(
+    `insert into day_reopenings (business_id, trip_day_id, driver_id, reason, previous_odometer_end, previous_ended_at,
+                                 previous_device_ended_at, reopened_by, reopened_at)
+     select business_id, id, driver_id, $2, odometer_end, ended_at, device_ended_at, $3, $4 from trip_days where id = $1`,
+    [s.id, p.reason.trim(), ctx.userId, ctx.now],
+  );
+  await ctx.db.query('update trip_days set odometer_end = null, ended_at = null, device_ended_at = null where id = $1', [s.id]);
+  await refreshSettlement(ctx.db, s.id);
+  emit(ctx, { type: 'DayReopened', businessId, subjectUserId: s.driverId, entityId: s.id, link: `/days/${s.id}/settlement` });
+  return { tripDayId: s.id, previous };
 }
 
 /** UC8 step 5 */

@@ -10,10 +10,19 @@ import {
   type DayView,
 } from '@dt/domain';
 import { router, Stack } from 'expo-router';
-import { RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { Linking, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { DayActivity } from '@/components/day-activity';
-import { callPhone, DayStatusPill, dayDetail, HomeHeader, initialsOf, QuickLinks, type Business } from '@/components/home-parts';
+import {
+  callPhone,
+  DayStatusPill,
+  dayDetail,
+  HomeHeader,
+  initialsOf,
+  QuickLinks,
+  type Business,
+} from '@/components/home-parts';
 import { Text } from '@/components/text';
 import { Avatar, Button, Card, EmptyState, ListRow, LoadError, Note, ScreenLoading, Section } from '@/components/ui';
 import {
@@ -27,7 +36,9 @@ import {
 } from '@/lib/arrangements';
 import { useDriverOverview } from '@/lib/business';
 import { reasonForCode } from '@/lib/commands';
+import { useAuth } from '@/lib/auth';
 import { useCommandQueue } from '@/lib/queue';
+import { LOCATION_PROBLEMS, stopTrackingUnless, turnOnLocation, useLocationOn, type LocationProblem } from '@/lib/tracking';
 import { colors, radius, space, themedStyles, type } from '@/lib/theme';
 
 const REFUSED_TITLE: Record<string, string> = {
@@ -56,6 +67,33 @@ function openSettlement(day: DayView, plate: string) {
   router.push({ pathname: '/day-settlement', params: { day: day.id, plate } });
 }
 
+/** Shown when location has stopped during a day: turned off in settings, or the phone restarted. */
+function LocationWarning({ tripDayId }: { tripDayId: string }) {
+  const { userId, account } = useAuth();
+  const { on, recheck } = useLocationOn(tripDayId, userId ?? '');
+  const [problem, setProblem] = useState<LocationProblem | null>(null);
+  if (on) return null;
+
+  const turnOn = async () => {
+    const businessId = account?.business?.id;
+    if (!userId || !businessId) return;
+    setProblem(await turnOnLocation({ userId, businessId, tripDayId }));
+    recheck();
+  };
+
+  return (
+    <Card style={styles.refused}>
+      <Text style={styles.refusedTitle}>Location is off</Text>
+      <Text style={styles.refusedText}>{problem ? LOCATION_PROBLEMS[problem] : 'Your owner cannot see this bus. Turn location back on.'}</Text>
+      {problem === 'blocked' ? (
+        <Button compact variant="secondary" label="Open phone settings" onPress={() => void Linking.openSettings()} />
+      ) : (
+        <Button compact label="Turn on location" onPress={() => void turnOn()} />
+      )}
+    </Card>
+  );
+}
+
 function RunningDay(props: {
   day: DayView;
   vehicleId: string;
@@ -66,12 +104,13 @@ function RunningDay(props: {
 }) {
   const { day, vehicleId, plate } = props;
   const summary = summariseDay(props.entries, props.costs, day.id);
-  const record = (kind: 'takings' | 'remittance') => router.push({ pathname: '/record-cash', params: { day: day.id, kind } });
+  const record = (kind: 'takings' | 'remittance') => router.push({ pathname: '/record-cash', params: { day: day.id, kind, cash: String(summary.cashInHand) } });
   const entries = props.entries.filter((e) => e.tripDayId === day.id);
   const costs = props.costs.filter((c) => c.tripDayId === day.id);
 
   return (
     <>
+      <LocationWarning tripDayId={day.id} />
       <View style={styles.hero}>
         <View style={styles.heroTop}>
           <Text style={styles.heroLabel}>Cash you should have</Text>
@@ -88,7 +127,8 @@ function RunningDay(props: {
       </View>
 
       <View style={styles.actions}>
-        <Button label="Record takings" icon="plus" onPress={() => record('takings')} />
+        <Button label="Start trip" icon="map" onPress={() => router.push('/trip')} />
+        <Button variant="secondary" label="Record takings" icon="plus" onPress={() => record('takings')} />
         <View style={styles.actionRow}>
           <View style={styles.flex}>
             <Button variant="secondary" label="Give cash" icon="wallet" onPress={() => record('remittance')} />
@@ -150,7 +190,7 @@ function IdleBus(props: {
           <View style={styles.startAction}>
             <Button
               label="Start day"
-              onPress={() => router.push({ pathname: '/start-day', params: { bus: props.vehicleId, plate } })}
+              onPress={() => router.push({ pathname: '/start-day', params: { bus: props.vehicleId, plate, last: last?.odometerEnd == null ? '' : String(last.odometerEnd) } })}
             />
           </View>
         ) : null}
@@ -189,7 +229,7 @@ function IdleBus(props: {
 export function DriverHome({ business, userId }: { business: Business; userId: string }) {
   const insets = useSafeAreaInsets();
   const { data: overview, failed, refreshing, reload } = useDriverOverview(business.id, userId);
-  const { waiting, refused, dismissRefused } = useCommandQueue(userId, reload);
+  const { loaded, waiting, refused, dismissRefused } = useCommandQueue(userId, reload);
   const arrangements = overview?.arrangements ?? [];
   const offers = arrangements.filter((a) => a.status === 'proposed');
   const agreed = arrangements.filter((a) => a.status === 'active');
@@ -197,8 +237,15 @@ export function DriverHome({ business, userId }: { business: Business; userId: s
   const days = applyQueuedDayCommands(overview?.days ?? [], waiting);
   const { entries, costs } = applyQueuedEntries(overview?.entries ?? [], overview?.costs ?? [], waiting);
   // One person drives one bus at a time.
-  const running = days.some((d) => d.odometerEnd === null);
+  const runningDayId = days.find((d) => d.odometerEnd === null)?.id ?? null;
+  const running = runningDayId !== null;
   const toCheck = overview?.paymentsToCheck ?? [];
+  // Only on fresh facts: a saved copy could be missing a day that is really running.
+  const factsAreFresh = loaded && overview !== null && !overview.saved;
+
+  useEffect(() => {
+    if (factsAreFresh) stopTrackingUnless(runningDayId);
+  }, [factsAreFresh, runningDayId]);
 
   return (
     <ScrollView

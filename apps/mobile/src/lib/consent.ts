@@ -8,21 +8,21 @@
  * blanks below are filled in.
  */
 export const NOTICE_IS_DRAFT = true;
-export const NOTICE_VERSION = 'draft-3';
+export const NOTICE_VERSION = 'draft-5';
 export const CONSENT_SCOPE = 'data_notice';
 
 export const NOTICE_SECTIONS: readonly { heading: string; body: string }[] = [
   {
     heading: 'What we collect',
-    body: 'Your phone number and name, the business you belong to, the buses and agreements you are part of, odometer readings, and the takings, costs and payments you or your business record.',
+    body: 'Your phone number and name, the business you belong to, the buses and agreements you are part of, odometer readings, and the takings, costs and payments you or your business record. If you are a driver, we also collect the location and speed of your phone from when you start your day until you end it, even when the app is closed. Location must be on to start a day. We do not collect it outside your working day.',
   },
   {
     heading: 'Why we collect it',
-    body: 'To sign you in, keep a shared record of each working day, work out who owes whom, and tell people when something needs their attention.',
+    body: 'To sign you in, keep a shared record of each working day, work out who owes whom, show the owner where their buses are, and tell people when something needs their attention.',
   },
   {
     heading: 'Who can see it',
-    body: 'The owner of your business can see the records of that business. A driver can see their own days and agreements. People in the same business can see each other’s names and phone numbers.',
+    body: 'The owner of your business can see the records of that business. This includes where each bus is and where it has been. A driver can see their own days and agreements. People in the same business can see each other’s names and phone numbers. When a driver plans a trip, their location and destination are sent to outside map services (Photon and OSRM, which use OpenStreetMap) to find the place and the route, without their name or phone number.',
   },
   {
     heading: 'Where it is kept',

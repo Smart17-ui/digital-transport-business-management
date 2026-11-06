@@ -1,11 +1,73 @@
 import { router, Stack } from 'expo-router';
-import { Alert, ScrollView, StyleSheet, View } from 'react-native';
+import { Alert, ScrollView, StyleSheet, Switch, View } from 'react-native';
 import { OptionCard } from '@/components/form';
 import { initialsOf } from '@/components/home-parts';
 import { Text } from '@/components/text';
-import { Avatar, Card, ListRow, Section } from '@/components/ui';
+import { Avatar, Card, ListRow, Pill, Section } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
+import { setVoiceOn, useVoiceOn } from '@/lib/navigation';
 import { colors, setThemeMode, space, themedStyles, type, useThemeMode } from '@/lib/theme';
+import { trackingDayId, useLocationOn } from '@/lib/tracking';
+
+function TrackingOnRow({ tripDayId, userId }: { tripDayId: string; userId: string }) {
+  const { on } = useLocationOn(tripDayId, userId);
+  return on ? (
+    <ListRow first icon="map" title="On" detail="Your owner can see the bus until you end your day." right={<Pill label="Sharing" tone="ok" />} />
+  ) : (
+    <ListRow
+      first
+      icon="map"
+      title="Stopped"
+      detail="Your owner cannot see the bus. Go to your home screen to turn location back on."
+      right={<Pill label="Off" tone="problem" />}
+      onPress={() => router.dismissAll()}
+    />
+  );
+}
+
+/** Tracking follows the working day, so there is no switch here: this only shows where it stands. */
+function VehicleTracking() {
+  const { userId, account } = useAuth();
+  const tripDayId = trackingDayId();
+  return (
+    <Section title="Vehicle tracking">
+      <Card style={styles.list}>
+        {account?.business?.role === 'owner' ? (
+          <ListRow first icon="map" title="Live map" detail="See where your buses are." onPress={() => router.push('/map')} />
+        ) : tripDayId && userId ? (
+          <TrackingOnRow tripDayId={tripDayId} userId={userId} />
+        ) : (
+          <ListRow first icon="map" title="Off" detail="Location turns on when you start your day, and off when you end it." />
+        )}
+      </Card>
+    </Section>
+  );
+}
+
+function TripDirections() {
+  const voiceOn = useVoiceOn();
+  return (
+    <Section title="Trip directions">
+      <Card style={styles.list}>
+        <ListRow
+          first
+          icon={voiceOn ? 'volume' : 'volumeOff'}
+          title="Spoken directions"
+          detail="The app tells you each turn out loud during a trip."
+          right={
+            <Switch
+              value={voiceOn}
+              onValueChange={setVoiceOn}
+              accessibilityLabel="Spoken directions"
+              trackColor={{ true: colors.primary, false: colors.borderStrong }}
+              thumbColor={colors.surface}
+            />
+          }
+        />
+      </Card>
+    </Section>
+  );
+}
 
 export default function Settings() {
   const { account, signOut, signOutEverywhere } = useAuth();
@@ -53,6 +115,9 @@ export default function Settings() {
           ) : null}
         </View>
       </Card>
+
+      <VehicleTracking />
+      {business?.role === 'owner' ? null : <TripDirections />}
 
       <Section title="Appearance">
         <View accessibilityRole="radiogroup">

@@ -37,7 +37,15 @@
         }
       ],
       "expo-sqlite",
-      "expo-font"
+      "expo-font",
+      [
+        "expo-location",
+        {
+          "isAndroidForegroundServiceEnabled": true,
+          "isAndroidBackgroundLocationEnabled": false,
+          "locationWhenInUsePermission": "Digital Transport shares the bus location with its owner while your day is running."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

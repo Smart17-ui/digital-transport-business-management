@@ -1,6 +1,7 @@
 // The Command API (design 8.1): every write from the app arrives here.
 //
 //   POST /command               { commands: Command[] }  -> { results: CommandResult[] }
+//   POST /command/positions     PositionUpload           -> { accepted, dropped }
 //   GET  /command/settlement?tripDayId=...               -> SettlementView
 //
 // Commands in a batch are applied in order, one transaction each, exactly as
@@ -8,7 +9,7 @@
 // rest; a command that depends on it fails with its own reason.
 import { createClient } from '@supabase/supabase-js';
 import { DomainError } from '@dt/domain';
-import { handleCommand, viewSettlement } from '@dt/server';
+import { handleCommand, recordPositions, viewSettlement } from '@dt/server';
 import { corsHeaders, database, json, relay } from '../_shared/runtime.ts';
 
 const MAX_BATCH = 100;
@@ -34,6 +35,9 @@ Deno.serve(async (req) => {
 
     if (req.method !== 'POST') return json({ error: 'method not allowed' }, 405);
     const body = await req.json().catch(() => null);
+
+    if (url.pathname.endsWith('/positions')) return json(await recordPositions(database, userId, body));
+
     const commands: unknown[] = Array.isArray(body?.commands) ? body.commands : [];
     if (commands.length === 0 || commands.length > MAX_BATCH) {
       return json({ error: `send 1 to ${MAX_BATCH} commands` }, 400);

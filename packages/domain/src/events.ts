@@ -10,6 +10,7 @@ export const EVENT_TYPES = [
   'ArrangementEnded',
   'DayStarted',
   'DayClosed',
+  'DayReopened',
   'DayReported',
   'DayReportAccepted',
   'DayReportRejected',

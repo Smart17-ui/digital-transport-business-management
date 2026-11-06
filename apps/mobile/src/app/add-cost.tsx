@@ -1,4 +1,4 @@
-import { parseKwacha } from '@dt/domain';
+import { costWarning, MAX_AMOUNT_NGWEE, parseKwacha } from '@dt/domain';
 import { randomUUID } from 'expo-crypto';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useRef, useState } from 'react';
@@ -9,6 +9,7 @@ import { BottomActions, Button } from '@/components/ui';
 import { kwacha } from '@/lib/arrangements';
 import { useAuth } from '@/lib/auth';
 import { COST_CATEGORIES, type CostCategory } from '@/lib/business';
+import { confirmNumber } from '@/lib/confirm-number';
 import { enqueue } from '@/lib/queue';
 import { colors, space, themedStyles } from '@/lib/theme';
 
@@ -40,7 +41,8 @@ export default function AddCost() {
   const amount = amountFrom(amountText);
   const fuel = category === 'fuel';
   const litres = fuel ? litresFrom(litresText) : undefined;
-  const ready = !!category && amount > 0 && litres !== null && !saving;
+  const tooLarge = amount > MAX_AMOUNT_NGWEE;
+  const ready = !!category && amount > 0 && !tooLarge && litres !== null && !saving;
 
   const save = async () => {
     const businessId = account?.business?.id;
@@ -74,7 +76,12 @@ export default function AddCost() {
         <Text style={styles.intro}>Record money you spent from the day's cash.</Text>
         <Text style={styles.label}>What was it for?</Text>
         <Choice wrap options={COST_CATEGORIES} value={category} onChange={setCategory} />
-        <MoneyField label="Amount (K)" value={amountText} onChange={setAmountText} />
+        <MoneyField
+          label="Amount (K)"
+          value={amountText}
+          onChange={setAmountText}
+          hint={tooLarge ? 'That is too large. One entry cannot be more than K1,000,000.' : undefined}
+        />
         {fuel ? (
           <MoneyField
             label="Litres (optional)"
@@ -96,7 +103,7 @@ export default function AddCost() {
         <Button
           disabled={!ready}
           label={saving ? 'Saving...' : amount > 0 ? `Record ${kwacha(amount)}` : 'Enter an amount'}
-          onPress={save}
+          onPress={() => confirmNumber(costWarning(amount, litres ?? null), () => void save())}
         />
       </BottomActions>
     </KeyboardAvoidingView>

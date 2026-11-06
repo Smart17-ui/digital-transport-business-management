@@ -46,6 +46,7 @@ const payloads = {
     odometerStart: v.int(),
   }),
   end_day: v.object({ tripDayId: v.uuid(), odometerEnd: v.int() }),
+  reopen_day: v.object({ tripDayId: v.uuid(), reason: v.nonEmpty(300) }),
   record_handover: v.object({
     entryId: v.uuid(),
     tripDayId: v.uuid(),

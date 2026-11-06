@@ -12,6 +12,9 @@ import {
 } from './expense.ts';
 import { validateHandover, type IncomeEntry, type NewHandover, type PaymentMethod } from './income-entry.ts';
 
+/** The most an odometer can show: seven digits. */
+const MAX_ODOMETER_KM = 9_999_999;
+
 export type TripDayStatus = 'open' | 'closed';
 
 export interface TripDayProps {
@@ -113,6 +116,13 @@ export class TripDay {
     invariant(odometerEnd >= this.props.odometerStart, 'day.end_reading_below_start');
     this.props = { ...this.props, odometerEnd, endedAt: at };
     return odometerEnd - this.props.odometerStart;
+  }
+
+  /** An Owner reopens a day ended by mistake. What it said is kept in day_reopenings. */
+  reopen(reason: string): void {
+    invariant(this.status === 'closed', 'day.not_closed');
+    invariant(reason.trim().length > 0, 'day.reopen_reason_required');
+    this.props = { ...this.props, odometerEnd: null, endedAt: null };
   }
 
   /** UC8 step 5: a new handover, pending confirmation by the other party. */
@@ -242,5 +252,5 @@ export function buildExpense(
 }
 
 function assertOdometer(reading: number): void {
-  invariant(Number.isInteger(reading) && reading >= 0, 'day.invalid_odometer');
+  invariant(Number.isInteger(reading) && reading >= 0 && reading <= MAX_ODOMETER_KM, 'day.invalid_odometer');
 }

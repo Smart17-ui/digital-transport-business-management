@@ -1,4 +1,4 @@
-import { parseKwacha } from '@dt/domain';
+import { correctionWarning, MAX_AMOUNT_NGWEE, parseKwacha } from '@dt/domain';
 import { randomUUID } from 'expo-crypto';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useRef, useState } from 'react';
@@ -9,6 +9,7 @@ import { BottomActions, Button } from '@/components/ui';
 import { kwacha } from '@/lib/arrangements';
 import { useAuth } from '@/lib/auth';
 import { reasonFor, sendCommand } from '@/lib/commands';
+import { confirmNumber } from '@/lib/confirm-number';
 import { colors, space, themedStyles } from '@/lib/theme';
 
 function amountFrom(text: string): number | null {
@@ -32,7 +33,8 @@ export default function CorrectEntry() {
   const attempt = useRef({ key: '', reversalId: randomUUID(), replacementId: randomUUID(), clientId: randomUUID() });
 
   const amount = amountFrom(amountText);
-  const ready = amount !== null && reason.trim() !== '' && !saving;
+  const tooLarge = amount !== null && amount > MAX_AMOUNT_NGWEE;
+  const ready = amount !== null && !tooLarge && reason.trim() !== '' && !saving;
 
   const save = async () => {
     const businessId = account?.business?.id;
@@ -80,7 +82,7 @@ export default function CorrectEntry() {
           label="The right amount (K)"
           value={amountText}
           onChange={setAmountText}
-          hint="Enter 0 if this entry should not count at all."
+          hint={tooLarge ? 'That is too large. One entry cannot be more than K1,000,000.' : 'Enter 0 if this entry should not count at all.'}
         />
         <TextField
           label="Why is it being corrected?"
@@ -99,7 +101,7 @@ export default function CorrectEntry() {
         <Button
           disabled={!ready}
           label={saving ? 'Saving...' : amount === null ? 'Enter the right amount' : `Correct to ${kwacha(amount)}`}
-          onPress={save}
+          onPress={() => confirmNumber(correctionWarning(amount ?? 0, original), () => void save())}
         />
       </BottomActions>
     </KeyboardAvoidingView>
